@@ -25,10 +25,44 @@ package edu.pitt.dbmi.brainai.demo.data;
  * @author Kevin V. Bui (kvb2univpitt@gmail.com)
  */
 public final class FileHeaders {
-    
-    public static String[] PATIENT = {"PERSON_ID", "birth_dt_tm", "name_last", "name_first", "sex", "street_addr", "city", "state", "zipcode"};
-    public static String[] ENCOUNTER = {"ENCNTR_ID", "REG_DT_TM", "DISCH_DT_TM", "PERSON_ID", "ENCNTR_TYPE_CD", "code_value.display", "snomed_code", "REASON_FOR_VISIT"};
-    public static String[] OBSERVATION = {"event_end_dt_tm", "PERSON_ID", "ENCNTR_ID", "loinc_code", "loinc_description", "result_val", "result_units_cd", "Clinical Event Result Type", "category.code"};
+
+    public static String[] PATIENT = {
+        "PERSON_ID",
+        "birth_dt_tm",
+        "name_last",
+        "name_first",
+        "sex",
+        "street_addr",
+        "city",
+        "state",
+        "zipcode"
+    };
+    public static String[] ENCOUNTER = {
+        "ENCNTR_ID",
+        "REG_DT_TM",
+        "DISCH_DT_TM",
+        "PERSON_ID",
+        "ENCNTR_TYPE_CD",
+        "code_value.display",
+        "snomed_code",
+        "REASON_FOR_VISIT"
+    };
+    public static String[] OBSERVATION = {
+        "event_end_dt_tm",
+        "PERSON_ID",
+        "ENCNTR_ID",
+        "loinc_code",
+        "loinc_description",
+        "result_val",
+        "result_units_cd",
+        "Clinical Event Result Type",
+        "category.code"
+    };
+    public static String[] DIAGNOSTIC_REPORT = {
+        "effective_dt_tm",
+        "PERSON_ID",
+        "ENCNTR_ID"
+    };
 
     private FileHeaders() {
     }

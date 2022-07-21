@@ -34,6 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
@@ -73,11 +74,13 @@ public class MapFromSynthea {
         String dirOut = outDir.toString();
         try (PrintWriter patientWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "patients.tsv")));
                 PrintWriter encounterWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "encounters.tsv")));
-                PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")))) {
+                PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")));
+                PrintWriter diagnosticReportWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "diagnostic_report.tsv")))) {
             // write out headers
             patientWriter.println(Arrays.stream(FileHeaders.PATIENT).collect(Collectors.joining("\t")));
             encounterWriter.println(Arrays.stream(FileHeaders.ENCOUNTER).collect(Collectors.joining("\t")));
             observationWriter.println(Arrays.stream(FileHeaders.OBSERVATION).collect(Collectors.joining("\t")));
+            diagnosticReportWriter.println(Arrays.stream(FileHeaders.DIAGNOSTIC_REPORT).collect(Collectors.joining("\t")));
 
             // write out data
             for (Path file : FileUtils.listFiles(dataDir)) {
@@ -86,9 +89,25 @@ public class MapFromSynthea {
                     extractPatient(bundle, patientWriter);
                     extractEncounter(bundle, encounterWriter);
                     extractObservation(bundle, observationWriter);
+                    extractDiagnosticReport(bundle, diagnosticReportWriter);
                 }
             }
         }
+    }
+
+    private static void extractDiagnosticReport(Bundle bundle, PrintWriter writer) {
+        List<String> data = new LinkedList<>();
+        bundle.getEntry().stream()
+                .filter(e -> e.getResource().fhirType().equals("DiagnosticReport"))
+                .map(e -> (DiagnosticReport) e.getResource())
+                .forEach(diagnosticReport -> {
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
+                    data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
+                    data.add(diagnosticReport.getEncounter().getReference().replace("urn:uuid:", ""));
+
+                    writer.println(data.stream().collect(Collectors.joining("\t")));
+                    data.clear();
+                });
     }
 
     private static void extractObservation(Bundle bundle, PrintWriter writer) {

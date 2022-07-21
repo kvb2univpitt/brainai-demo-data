@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
@@ -53,13 +54,15 @@ import org.hl7.fhir.r4.model.Type;
  */
 public class ReducedMapFromSynthea {
 
-    private static int numOfPatients = 3;
-    private static int numOfEncounters = 6;
-    private static int numOfObservations = 5;
+    private static final int numOfPatients = 3;
+    private static final int numOfEncounters = 6;
+    private static final int numOfObservations = 5;
+    private static final int numOfDiagnosticReport = 5;
 
     private static int totalPatients = 0;
     private static int totalEncounters = 0;
     private static int totalObservations = 0;
+    private static int totalDiagnosticReports = 0;
 
     /**
      * Map Synthea patient ID (key) to Cerner patient ID (value).
@@ -96,11 +99,15 @@ public class ReducedMapFromSynthea {
 
     private static void map(Path dataDir, Path outDir) throws IOException {
         String dirOut = outDir.toString();
-        try ( PrintWriter patientWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "patients.tsv")));  PrintWriter encounterWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "encounters.tsv")));  PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")))) {
+        try (PrintWriter patientWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "patients.tsv")));
+                PrintWriter encounterWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "encounters.tsv")));
+                PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")));
+                PrintWriter diagnosticReportWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "diagnostic_report.tsv")))) {
             // write out headers
             patientWriter.println(Arrays.stream(FileHeaders.PATIENT).collect(Collectors.joining("\t")));
             encounterWriter.println(Arrays.stream(FileHeaders.ENCOUNTER).collect(Collectors.joining("\t")));
             observationWriter.println(Arrays.stream(FileHeaders.OBSERVATION).collect(Collectors.joining("\t")));
+            diagnosticReportWriter.println(Arrays.stream(FileHeaders.DIAGNOSTIC_REPORT).collect(Collectors.joining("\t")));
 
             // write out data
             int count = 0;
@@ -109,11 +116,12 @@ public class ReducedMapFromSynthea {
                     break;
                 }
 
-                try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+                try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
                     Bundle bundle = (Bundle) FhirUtils.JSON_PARSER.parseResource(reader);
                     extractPatient(bundle, patientWriter);
                     extractEncounter(bundle, encounterWriter);
                     extractObservation(bundle, observationWriter);
+                    extractDiagnosticReport(bundle, diagnosticReportWriter);
 
                     count++;
                     totalPatients++;
@@ -123,6 +131,35 @@ public class ReducedMapFromSynthea {
             System.out.printf("Patients: %d%n", totalPatients);
             System.out.printf("Encounters: %d%n", totalEncounters);
             System.out.printf("Observations: %d%n", totalObservations);
+            System.out.printf("Diagnostic Reports: %d%n", totalDiagnosticReports);
+        }
+    }
+
+    private static void extractDiagnosticReport(Bundle bundle, PrintWriter writer) {
+        List<String> data = new LinkedList<>();
+        int count = 0;
+        for (Bundle.BundleEntryComponent component : bundle.getEntry()) {
+            if (count >= numOfDiagnosticReport) {
+                break;
+            }
+
+            Resource resource = component.getResource();
+            if (resource.fhirType().equals("DiagnosticReport")) {
+                DiagnosticReport diagnosticReport = (DiagnosticReport) resource;
+
+                String encounterID = diagnosticReport.getEncounter().getReference().replace("urn:uuid:", "");
+                if (encounterIds.containsKey(encounterID)) {
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
+                    data.add(getPatientId(diagnosticReport));
+                    data.add(getEncounterId(diagnosticReport));
+
+                    writer.println(data.stream().collect(Collectors.joining("\t")));
+                    data.clear();
+
+                    count++;
+                    totalDiagnosticReports++;
+                }
+            }
         }
     }
 
@@ -130,7 +167,7 @@ public class ReducedMapFromSynthea {
         List<String> data = new LinkedList<>();
         int count = 0;
         for (Bundle.BundleEntryComponent component : bundle.getEntry()) {
-            if (count >= numOfEncounters) {
+            if (count >= numOfObservations) {
                 break;
             }
 
@@ -221,6 +258,21 @@ public class ReducedMapFromSynthea {
     }
 
     /**
+     * Map Synthea encounter ID to Cerner encounter ID from diagnostic report .
+     *
+     * @param observation
+     * @return
+     */
+    private static String getEncounterId(DiagnosticReport diagnosticReport) {
+        String id = diagnosticReport.getEncounter().getReference().replace("urn:uuid:", "");
+        if (!encounterIds.containsKey(id)) {
+            System.err.printf("No encounter %s found for the observation.%n", id);
+        }
+
+        return encounterIds.get(id);
+    }
+
+    /**
      * Map Synthea encounter ID to Cerner encounter ID from observation.
      *
      * @param observation
@@ -248,6 +300,22 @@ public class ReducedMapFromSynthea {
         }
 
         return encounterIds.get(id);
+    }
+
+    /**
+     * Map Synthea patient ID to Cerner patient ID from Synthea diagnostic
+     * report.
+     *
+     * @param encounter
+     * @return
+     */
+    private static String getPatientId(DiagnosticReport diagnosticReport) {
+        String id = diagnosticReport.getSubject().getReference().replace("urn:uuid:", "");
+        if (!patientIds.containsKey(id)) {
+            System.err.printf("No patient %s found for the diagnostic report.%n", id);
+        }
+
+        return patientIds.get(id);
     }
 
     /**

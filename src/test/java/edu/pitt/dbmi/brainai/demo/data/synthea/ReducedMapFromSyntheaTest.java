@@ -37,6 +37,8 @@ public class ReducedMapFromSyntheaTest {
 
     /**
      * Test of main method, of class ReducedMapFromSynthea.
+     *
+     * @throws IOException
      */
     @Test
     public void testMain() throws IOException {
