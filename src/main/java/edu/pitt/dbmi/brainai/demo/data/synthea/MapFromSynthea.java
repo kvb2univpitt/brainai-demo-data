@@ -39,6 +39,7 @@ import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Quantity;
+import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Type;
 
 /**
@@ -84,7 +85,7 @@ public class MapFromSynthea {
 
             // write out data
             for (Path file : FileUtils.listFiles(dataDir)) {
-                try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+                try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
                     Bundle bundle = (Bundle) FhirUtils.JSON_PARSER.parseResource(reader);
                     extractPatient(bundle, patientWriter);
                     extractEncounter(bundle, encounterWriter);
@@ -101,12 +102,31 @@ public class MapFromSynthea {
                 .filter(e -> e.getResource().fhirType().equals("DiagnosticReport"))
                 .map(e -> (DiagnosticReport) e.getResource())
                 .forEach(diagnosticReport -> {
-                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
-                    data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
-                    data.add(diagnosticReport.getEncounter().getReference().replace("urn:uuid:", ""));
+                    List<Reference> references = diagnosticReport.getResult();
+                    if (references.isEmpty()) {
+                        data.add(diagnosticReport.getIdElement().getIdPart().replace("urn:uuid:", ""));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
+                        data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
+                        data.add(diagnosticReport.getEncounter().getReference().replace("urn:uuid:", ""));
+                        data.add("");
 
-                    writer.println(data.stream().collect(Collectors.joining("\t")));
-                    data.clear();
+                        writer.println(data.stream().collect(Collectors.joining("\t")));
+                        data.clear();
+                    } else {
+                        references.forEach(reference -> {
+                            data.add(diagnosticReport.getIdElement().getIdPart().replace("urn:uuid:", ""));
+                            data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
+                            data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
+                            data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
+                            data.add(diagnosticReport.getEncounter().getReference().replace("urn:uuid:", ""));
+                            data.add(reference.getReference().replace("urn:uuid:", ""));
+
+                            writer.println(data.stream().collect(Collectors.joining("\t")));
+                            data.clear();
+                        });
+                    }
+
                 });
     }
 
@@ -116,6 +136,7 @@ public class MapFromSynthea {
                 .filter(e -> e.getResource().fhirType().equals("Observation"))
                 .map(e -> (Observation) e.getResource())
                 .forEach(observation -> {
+                    data.add(observation.getIdElement().getIdPart().replace("urn:uuid:", ""));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(observation.getEffectiveDateTimeType().getValue()));
                     data.add(observation.getSubject().getReference().replace("urn:uuid:", ""));
                     data.add(observation.getEncounter().getReference().replace("urn:uuid:", ""));

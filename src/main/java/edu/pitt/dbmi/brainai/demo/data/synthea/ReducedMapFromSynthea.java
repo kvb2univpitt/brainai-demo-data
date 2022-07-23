@@ -41,6 +41,7 @@ import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Quantity;
+import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.Type;
 
@@ -54,10 +55,10 @@ import org.hl7.fhir.r4.model.Type;
  */
 public class ReducedMapFromSynthea {
 
-    private static final int numOfPatients = 3;
-    private static final int numOfEncounters = 6;
-    private static final int numOfObservations = 5;
-    private static final int numOfDiagnosticReport = 5;
+    private static final int numOfPatients = 5;
+    private static final int numOfEncounters = 10;
+    private static final int numOfObservations = 10;
+    private static final int numOfDiagnosticReport = 10;
 
     private static int totalPatients = 0;
     private static int totalEncounters = 0;
@@ -74,8 +75,21 @@ public class ReducedMapFromSynthea {
      */
     private static final Map<String, String> encounterIds = new HashMap<>();
 
+    /**
+     * Map Synthea observation ID (key) to Cerner observation ID (value)
+     */
+    private static final Map<String, String> observationIds = new HashMap<>();
+
+    /**
+     * Map Synthea diagnostic report ID (key) to Cerner diagnostic report ID
+     * (value)
+     */
+    private static final Map<String, String> diagnosticReportIds = new HashMap<>();
+
     private static int patientIdCount = 0;
     private static int encounterIdCount = 0;
+    private static int observationIdCount = 0;
+    private static int diagnosticReportIdCount = 0;
 
     /**
      * @param args the command line arguments
@@ -116,7 +130,7 @@ public class ReducedMapFromSynthea {
                     break;
                 }
 
-                try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+                try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
                     Bundle bundle = (Bundle) FhirUtils.JSON_PARSER.parseResource(reader);
                     extractPatient(bundle, patientWriter);
                     extractEncounter(bundle, encounterWriter);
@@ -149,12 +163,33 @@ public class ReducedMapFromSynthea {
 
                 String encounterID = diagnosticReport.getEncounter().getReference().replace("urn:uuid:", "");
                 if (encounterIds.containsKey(encounterID)) {
-                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
-                    data.add(getPatientId(diagnosticReport));
-                    data.add(getEncounterId(diagnosticReport));
+                    List<Reference> references = diagnosticReport.getResult();
+                    if (references.isEmpty()) {
+                        data.add(getDiagnosticReportId(diagnosticReport));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
+                        data.add(getPatientId(diagnosticReport));
+                        data.add(getEncounterId(diagnosticReport));
+                        data.add("");
 
-                    writer.println(data.stream().collect(Collectors.joining("\t")));
-                    data.clear();
+                        writer.println(data.stream().collect(Collectors.joining("\t")));
+                        data.clear();
+                    } else {
+                        references.forEach(reference -> {
+                            String observationID = reference.getReference().replace("urn:uuid:", "");
+                            if (observationIds.containsKey(observationID)) {
+                                data.add(getDiagnosticReportId(diagnosticReport));
+                                data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
+                                data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
+                                data.add(getPatientId(diagnosticReport));
+                                data.add(getEncounterId(diagnosticReport));
+                                data.add(observationIds.get(observationID));
+
+                                writer.println(data.stream().collect(Collectors.joining("\t")));
+                                data.clear();
+                            }
+                        });
+                    }
 
                     count++;
                     totalDiagnosticReports++;
@@ -177,6 +212,7 @@ public class ReducedMapFromSynthea {
 
                 String encounterID = observation.getEncounter().getReference().replace("urn:uuid:", "");
                 if (encounterIds.containsKey(encounterID)) {
+                    data.add(getObservationId(observation));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(observation.getEffectiveDateTimeType().getValue()));
                     data.add(getPatientId(observation));
                     data.add(getEncounterId(observation));
@@ -273,6 +309,21 @@ public class ReducedMapFromSynthea {
     }
 
     /**
+     * Map Synthea encounter ID to Cerner encounter ID.
+     *
+     * @param encounter
+     * @return
+     */
+    private static String getDiagnosticReportId(DiagnosticReport diagnosticReport) {
+        String id = diagnosticReport.getIdElement().getIdPart().replace("urn:uuid:", "");
+        if (!diagnosticReportIds.containsKey(id)) {
+            diagnosticReportIds.put(id, String.format("diag-report%d", ++diagnosticReportIdCount));
+        }
+
+        return diagnosticReportIds.get(id);
+    }
+
+    /**
      * Map Synthea encounter ID to Cerner encounter ID from observation.
      *
      * @param observation
@@ -285,6 +336,15 @@ public class ReducedMapFromSynthea {
         }
 
         return encounterIds.get(id);
+    }
+
+    private static String getObservationId(Observation observation) {
+        String id = observation.getIdElement().getIdPart().replace("urn:uuid:", "");
+        if (!observationIds.containsKey(id)) {
+            observationIds.put(id, String.format("obs%d", ++observationIdCount));
+        }
+
+        return observationIds.get(id);
     }
 
     /**

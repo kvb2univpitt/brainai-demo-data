@@ -48,6 +48,7 @@ public final class FileHeaders {
         "REASON_FOR_VISIT"
     };
     public static String[] OBSERVATION = {
+        "OBSERV_ID",
         "event_end_dt_tm",
         "PERSON_ID",
         "ENCNTR_ID",
@@ -59,9 +60,12 @@ public final class FileHeaders {
         "category.code"
     };
     public static String[] DIAGNOSTIC_REPORT = {
+        "DIAG_REPORT_ID",
+        "issue_dt_tm",
         "effective_dt_tm",
         "PERSON_ID",
-        "ENCNTR_ID"
+        "ENCNTR_ID",
+        "OBSERV_ID"
     };
 
     private FileHeaders() {
