@@ -65,6 +65,7 @@ public final class FileHeaders {
         "PERSON_ID",
         "ENCNTR_ID",
         "OBSERV_ID",
+        "observ_display",
         "category_code",
         "category_display",
         "code_code",

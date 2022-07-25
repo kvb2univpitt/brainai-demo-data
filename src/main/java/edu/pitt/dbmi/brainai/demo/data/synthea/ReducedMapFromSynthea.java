@@ -172,6 +172,7 @@ public class ReducedMapFromSynthea {
                         data.add(getPatientId(diagnosticReport));
                         data.add(getEncounterId(diagnosticReport));
                         data.add("");
+                        data.add("");
 
                         addCoding(diagnosticReport.getCategory(), data);
                         addCoding(diagnosticReport.getCode(), data);
@@ -187,6 +188,7 @@ public class ReducedMapFromSynthea {
                                 data.add(getPatientId(diagnosticReport));
                                 data.add(getEncounterId(diagnosticReport));
                                 data.add(observationIds.get(observationID));
+                                data.add(reference.getDisplay());
 
                                 addCoding(diagnosticReport.getCategory(), data);
                                 addCoding(diagnosticReport.getCode(), data);

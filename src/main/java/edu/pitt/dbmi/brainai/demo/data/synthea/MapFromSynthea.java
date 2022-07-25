@@ -111,6 +111,7 @@ public class MapFromSynthea {
                         data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
                         data.add(diagnosticReport.getEncounter().getReference().replace("urn:uuid:", ""));
                         data.add("");
+                        data.add("");
 
                         addCoding(diagnosticReport.getCategory(), data);
                         addCoding(diagnosticReport.getCode(), data);
@@ -124,6 +125,7 @@ public class MapFromSynthea {
                             data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
                             data.add(diagnosticReport.getEncounter().getReference().replace("urn:uuid:", ""));
                             data.add(reference.getReference().replace("urn:uuid:", ""));
+                            data.add(reference.getDisplay());
 
                             addCoding(diagnosticReport.getCategory(), data);
                             addCoding(diagnosticReport.getCode(), data);
