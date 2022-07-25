@@ -64,7 +64,11 @@ public final class FileHeaders {
         "effective_dt_tm",
         "PERSON_ID",
         "ENCNTR_ID",
-        "OBSERV_ID"
+        "OBSERV_ID",
+        "category_code",
+        "category_display",
+        "code_code",
+        "code_display"
     };
 
     private FileHeaders() {

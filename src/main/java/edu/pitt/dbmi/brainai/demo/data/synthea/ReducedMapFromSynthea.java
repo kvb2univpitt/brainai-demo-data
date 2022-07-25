@@ -36,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Observation;
@@ -171,6 +173,9 @@ public class ReducedMapFromSynthea {
                         data.add(getEncounterId(diagnosticReport));
                         data.add("");
 
+                        addCoding(diagnosticReport.getCategory(), data);
+                        addCoding(diagnosticReport.getCode(), data);
+
                         writer.println(data.stream().collect(Collectors.joining("\t")));
                         data.clear();
                     } else {
@@ -183,6 +188,9 @@ public class ReducedMapFromSynthea {
                                 data.add(getEncounterId(diagnosticReport));
                                 data.add(observationIds.get(observationID));
 
+                                addCoding(diagnosticReport.getCategory(), data);
+                                addCoding(diagnosticReport.getCode(), data);
+
                                 writer.println(data.stream().collect(Collectors.joining("\t")));
                                 data.clear();
                             }
@@ -193,6 +201,28 @@ public class ReducedMapFromSynthea {
                     totalDiagnosticReports++;
                 }
             }
+        }
+    }
+
+    private static void addCoding(CodeableConcept codeableConcept, List<String> data) {
+        List<Coding> codings = codeableConcept.getCoding();
+        if (codings.isEmpty()) {
+            data.add("");
+            data.add("");
+        } else {
+            Coding coding = codings.get(0);
+            data.add(coding.getCode());
+            data.add(coding.getDisplay());
+        }
+    }
+
+    private static void addCoding(List<CodeableConcept> codeableConcepts, List<String> data) {
+        if (codeableConcepts.isEmpty()) {
+            data.add("");
+            data.add("");
+            data.add("");
+        } else {
+            addCoding(codeableConcepts.get(0), data);
         }
     }
 
