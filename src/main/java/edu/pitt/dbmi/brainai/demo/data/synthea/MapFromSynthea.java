@@ -85,7 +85,7 @@ public class MapFromSynthea {
 
             // write out data
             for (Path file : FileUtils.listFiles(dataDir)) {
-                try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+                try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
                     Bundle bundle = (Bundle) FhirUtils.JSON_PARSER.parseResource(reader);
                     extractPatient(bundle, patientWriter);
                     extractEncounter(bundle, encounterWriter);
@@ -104,7 +104,6 @@ public class MapFromSynthea {
                 .forEach(diagnosticReport -> {
                     List<Reference> references = diagnosticReport.getResult();
                     if (references.isEmpty()) {
-                        data.add(diagnosticReport.getIdElement().getIdPart().replace("urn:uuid:", ""));
                         data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
                         data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
                         data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
@@ -115,7 +114,6 @@ public class MapFromSynthea {
                         data.clear();
                     } else {
                         references.forEach(reference -> {
-                            data.add(diagnosticReport.getIdElement().getIdPart().replace("urn:uuid:", ""));
                             data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
                             data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
                             data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));

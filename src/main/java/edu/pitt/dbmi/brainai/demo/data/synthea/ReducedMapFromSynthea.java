@@ -130,7 +130,7 @@ public class ReducedMapFromSynthea {
                     break;
                 }
 
-                try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+                try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
                     Bundle bundle = (Bundle) FhirUtils.JSON_PARSER.parseResource(reader);
                     extractPatient(bundle, patientWriter);
                     extractEncounter(bundle, encounterWriter);
@@ -165,7 +165,6 @@ public class ReducedMapFromSynthea {
                 if (encounterIds.containsKey(encounterID)) {
                     List<Reference> references = diagnosticReport.getResult();
                     if (references.isEmpty()) {
-                        data.add(getDiagnosticReportId(diagnosticReport));
                         data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
                         data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
                         data.add(getPatientId(diagnosticReport));
@@ -178,7 +177,6 @@ public class ReducedMapFromSynthea {
                         references.forEach(reference -> {
                             String observationID = reference.getReference().replace("urn:uuid:", "");
                             if (observationIds.containsKey(observationID)) {
-                                data.add(getDiagnosticReportId(diagnosticReport));
                                 data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
                                 data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
                                 data.add(getPatientId(diagnosticReport));
