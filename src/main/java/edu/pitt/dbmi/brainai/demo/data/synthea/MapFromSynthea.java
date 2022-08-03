@@ -20,28 +20,20 @@ package edu.pitt.dbmi.brainai.demo.data.synthea;
 
 import edu.pitt.dbmi.brainai.demo.data.FileHeaders;
 import edu.pitt.dbmi.brainai.demo.data.utils.DateFormats;
-import edu.pitt.dbmi.brainai.demo.data.utils.FhirUtils;
 import edu.pitt.dbmi.brainai.demo.data.utils.FileUtils;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.CodeableConcept;
-import org.hl7.fhir.r4.model.Coding;
-import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Quantity;
-import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Type;
 
 /**
@@ -51,7 +43,7 @@ import org.hl7.fhir.r4.model.Type;
  *
  * @author Kevin V. Bui (kvb2univpitt@gmail.com)
  */
-public class MapFromSynthea {
+public class MapFromSynthea extends AbstractSyntheaDataMapper {
 
     /**
      * @param args the command line arguments
@@ -77,86 +69,19 @@ public class MapFromSynthea {
         String dirOut = outDir.toString();
         try (PrintWriter patientWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "patients.tsv")));
                 PrintWriter encounterWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "encounters.tsv")));
-                PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")));
-                PrintWriter diagnosticReportWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "diagnostic_report.tsv")))) {
+                PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")))) {
             // write out headers
-            patientWriter.println(Arrays.stream(FileHeaders.PATIENT).collect(Collectors.joining("\t")));
-            encounterWriter.println(Arrays.stream(FileHeaders.ENCOUNTER).collect(Collectors.joining("\t")));
-            observationWriter.println(Arrays.stream(FileHeaders.OBSERVATION).collect(Collectors.joining("\t")));
-            diagnosticReportWriter.println(Arrays.stream(FileHeaders.DIAGNOSTIC_REPORT).collect(Collectors.joining("\t")));
+            patientWriter.println(toLineHeader(FileHeaders.PATIENT));
+            encounterWriter.println(toLineHeader(FileHeaders.ENCOUNTER));
+            observationWriter.println(toLineHeader(FileHeaders.OBSERVATION));
 
             // write out data
             for (Path file : FileUtils.listFiles(dataDir)) {
-                try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
-                    Bundle bundle = (Bundle) FhirUtils.JSON_PARSER.parseResource(reader);
-                    extractPatient(bundle, patientWriter);
-                    extractEncounter(bundle, encounterWriter);
-                    extractObservation(bundle, observationWriter);
-                    extractDiagnosticReport(bundle, diagnosticReportWriter);
-                }
+                Bundle bundle = getBundle(file);
+                extractPatient(bundle, patientWriter);
+                extractEncounter(bundle, encounterWriter);
+                extractObservation(bundle, observationWriter);
             }
-        }
-    }
-
-    private static void extractDiagnosticReport(Bundle bundle, PrintWriter writer) {
-        List<String> data = new LinkedList<>();
-        bundle.getEntry().stream()
-                .filter(e -> e.getResource().fhirType().equals("DiagnosticReport"))
-                .map(e -> (DiagnosticReport) e.getResource())
-                .forEach(diagnosticReport -> {
-                    List<Reference> references = diagnosticReport.getResult();
-                    if (references.isEmpty()) {
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
-                        data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
-                        data.add(diagnosticReport.getEncounter().getReference().replace("urn:uuid:", ""));
-                        data.add("");
-                        data.add("");
-
-                        addCoding(diagnosticReport.getCategory(), data);
-                        addCoding(diagnosticReport.getCode(), data);
-
-                        writer.println(data.stream().collect(Collectors.joining("\t")));
-                        data.clear();
-                    } else {
-                        references.forEach(reference -> {
-                            data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getIssued()));
-                            data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(diagnosticReport.getEffectiveDateTimeType().getValue()));
-                            data.add(diagnosticReport.getSubject().getReference().replace("urn:uuid:", ""));
-                            data.add(diagnosticReport.getEncounter().getReference().replace("urn:uuid:", ""));
-                            data.add(reference.getReference().replace("urn:uuid:", ""));
-                            data.add(reference.getDisplay());
-
-                            addCoding(diagnosticReport.getCategory(), data);
-                            addCoding(diagnosticReport.getCode(), data);
-
-                            writer.println(data.stream().collect(Collectors.joining("\t")));
-                            data.clear();
-                        });
-                    }
-
-                });
-    }
-
-    private static void addCoding(CodeableConcept codeableConcept, List<String> data) {
-        List<Coding> codings = codeableConcept.getCoding();
-        if (codings.isEmpty()) {
-            data.add("");
-            data.add("");
-        } else {
-            Coding coding = codings.get(0);
-            data.add(coding.getCode());
-            data.add(coding.getDisplay());
-        }
-    }
-
-    private static void addCoding(List<CodeableConcept> codeableConcepts, List<String> data) {
-        if (codeableConcepts.isEmpty()) {
-            data.add("");
-            data.add("");
-            data.add("");
-        } else {
-            addCoding(codeableConcepts.get(0), data);
         }
     }
 
@@ -166,10 +91,10 @@ public class MapFromSynthea {
                 .filter(e -> e.getResource().fhirType().equals("Observation"))
                 .map(e -> (Observation) e.getResource())
                 .forEach(observation -> {
-                    data.add(observation.getIdElement().getIdPart().replace("urn:uuid:", ""));
+                    data.add(getCustomObservationId(observation));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(observation.getEffectiveDateTimeType().getValue()));
-                    data.add(observation.getSubject().getReference().replace("urn:uuid:", ""));
-                    data.add(observation.getEncounter().getReference().replace("urn:uuid:", ""));
+                    data.add(getCustomPatientId(observation));
+                    data.add(getCustomEncounterId(observation));
                     data.add(observation.getCode().getCodingFirstRep().getCode());
                     data.add(observation.getCode().getCodingFirstRep().getDisplay());
 
@@ -196,10 +121,10 @@ public class MapFromSynthea {
                 .filter(e -> e.getResource().fhirType().equals("Encounter"))
                 .map(e -> (Encounter) e.getResource())
                 .forEach(encounter -> {
-                    data.add(encounter.getIdElement().getIdPart().replace("urn:uuid:", ""));
+                    data.add(getCustomEncounterId(encounter));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getStart()));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getEnd()));
-                    data.add(encounter.getSubject().getReference().replace("urn:uuid:", ""));
+                    data.add(getCustomPatientId(encounter));
                     data.add("394656005");
                     data.add("Inpatient");
                     data.add("126598008");
@@ -216,15 +141,15 @@ public class MapFromSynthea {
                 .filter(e -> e.getResource().fhirType().equals("Patient"))
                 .map(e -> (Patient) e.getResource())
                 .forEach(patient -> {
-                    data.add(patient.getIdElement().getIdPart().replace("urn:uuid:", ""));
+                    data.add(getCustomPatientId(patient));
                     data.add(DateFormats.MM_DD_YYYY.format(patient.getBirthDate()));
                     data.add(patient.getNameFirstRep().getFamily());
                     data.add(patient.getNameFirstRep().getGiven().get(0).getValueAsString());
-                    data.add(FhirUtils.getValue(patient.getGender().toCode(), "female"));
-                    data.add(FhirUtils.getValue(patient.getAddressFirstRep().getText(), "4200 Fifth Ave"));
-                    data.add(FhirUtils.getValue(patient.getAddressFirstRep().getCity(), "Pittsburgh"));
-                    data.add(FhirUtils.getValue(patient.getAddressFirstRep().getState(), "Pennsylvania"));
-                    data.add(FhirUtils.getValue(patient.getAddressFirstRep().getPostalCode(), "15260"));
+                    data.add(getValue(patient.getGender().toCode(), "female"));
+                    data.add(getValue(patient.getAddressFirstRep().getText(), "4200 Fifth Ave"));
+                    data.add(getValue(patient.getAddressFirstRep().getCity(), "Pittsburgh"));
+                    data.add(getValue(patient.getAddressFirstRep().getState(), "Pennsylvania"));
+                    data.add(getValue(patient.getAddressFirstRep().getPostalCode(), "15260"));
 
                     writer.println(data.stream().collect(Collectors.joining("\t")));
                     data.clear();
