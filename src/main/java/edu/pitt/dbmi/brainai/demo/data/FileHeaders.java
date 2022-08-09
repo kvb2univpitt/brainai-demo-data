@@ -59,17 +59,15 @@ public final class FileHeaders {
         "Clinical Event Result Type",
         "category.code"
     };
-    public static String[] DIAGNOSTIC_REPORT = {
-        "issue_dt_tm",
-        "effective_dt_tm",
+    public static String[] MEDICATION_ADMINISTRATION = {
+        "MED_ADMIN_ID",
+        "status",
+        "effective_dt",
         "PERSON_ID",
         "ENCNTR_ID",
-        "OBSERV_ID",
-        "observ_display",
-        "category_code",
-        "category_display",
-        "code_code",
-        "code_display"
+        "med_code",
+        "med_system",
+        "med_display"
     };
 
     private FileHeaders() {

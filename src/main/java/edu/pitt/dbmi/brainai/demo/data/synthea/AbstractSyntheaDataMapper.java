@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Encounter;
+import org.hl7.fhir.r4.model.MedicationAdministration;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 
@@ -42,6 +43,8 @@ import org.hl7.fhir.r4.model.Patient;
  */
 public class AbstractSyntheaDataMapper {
 
+    protected static final String DATA_DELIMITER = "\t";
+
     protected static final IParser JSON_PARSER = FhirContext.forR4().newJsonParser();
 
     /**
@@ -50,10 +53,12 @@ public class AbstractSyntheaDataMapper {
     protected static final Map<String, String> syntheaToCustomPatientId = new HashMap<>();
     protected static final Map<String, String> syntheaToCustomEncounterId = new HashMap<>();
     protected static final Map<String, String> syntheaToCustomObservationId = new HashMap<>();
+    protected static final Map<String, String> syntheaToCustomMedicationAdministrationId = new HashMap<>();
 
     private static int patientIdCounter = 0;
     private static int encounterIdCounter = 0;
     private static int observationIdCounter = 0;
+    private static int medicationAdministrationIdCounter = 0;
 
     public AbstractSyntheaDataMapper() {
     }
@@ -63,7 +68,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static Bundle getBundle(Path file) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+        try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
             return (Bundle) JSON_PARSER.parseResource(reader);
         }
     }
@@ -74,6 +79,24 @@ public class AbstractSyntheaDataMapper {
 
     protected static String getValue(String value, String defaultValue) {
         return (value == null || value.isBlank()) ? defaultValue : value;
+    }
+
+    protected static String getCustomEncounterId(MedicationAdministration medicationAdministration) {
+        String id = extractId(medicationAdministration.getContext().getReference());
+        if (!syntheaToCustomEncounterId.containsKey(id)) {
+            System.err.printf("No encounter %s found for the medication administration.%n", id);
+        }
+
+        return syntheaToCustomEncounterId.get(id);
+    }
+
+    protected static String getCustomMedicationAdministrationId(MedicationAdministration medicationAdministration) {
+        String id = extractId(medicationAdministration.getIdElement().getIdPart());
+        if (!syntheaToCustomMedicationAdministrationId.containsKey(id)) {
+            syntheaToCustomMedicationAdministrationId.put(id, String.format("med_admin_%d", ++medicationAdministrationIdCounter));
+        }
+
+        return syntheaToCustomMedicationAdministrationId.get(id);
     }
 
     protected static String getCustomObservationId(Observation observation) {
@@ -101,6 +124,15 @@ public class AbstractSyntheaDataMapper {
         }
 
         return syntheaToCustomEncounterId.get(id);
+    }
+
+    protected static String getCustomPatientId(MedicationAdministration medicationAdministration) {
+        String id = extractId(medicationAdministration.getSubject().getReference());
+        if (!syntheaToCustomPatientId.containsKey(id)) {
+            System.err.printf("No patient %s found for the observation.%n", id);
+        }
+
+        return syntheaToCustomPatientId.get(id);
     }
 
     protected static String getCustomPatientId(Observation observation) {

@@ -19,6 +19,9 @@
 package edu.pitt.dbmi.brainai.demo.data.synthea;
 
 import edu.pitt.dbmi.brainai.demo.data.FileHeaders;
+import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.getCustomEncounterId;
+import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.getCustomMedicationAdministrationId;
+import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.getCustomPatientId;
 import edu.pitt.dbmi.brainai.demo.data.utils.DateFormats;
 import edu.pitt.dbmi.brainai.demo.data.utils.FileUtils;
 import java.io.IOException;
@@ -30,7 +33,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Encounter;
+import org.hl7.fhir.r4.model.MedicationAdministration;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Quantity;
@@ -69,11 +74,13 @@ public class MapFromSynthea extends AbstractSyntheaDataMapper {
         String dirOut = outDir.toString();
         try (PrintWriter patientWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "patients.tsv")));
                 PrintWriter encounterWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "encounters.tsv")));
-                PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")))) {
+                PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")));
+                PrintWriter medicationAdministrationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "medication_administrations.tsv")))) {
             // write out headers
             patientWriter.println(toLineHeader(FileHeaders.PATIENT));
             encounterWriter.println(toLineHeader(FileHeaders.ENCOUNTER));
             observationWriter.println(toLineHeader(FileHeaders.OBSERVATION));
+            medicationAdministrationWriter.println(toLineHeader(FileHeaders.MEDICATION_ADMINISTRATION));
 
             // write out data
             for (Path file : FileUtils.listFiles(dataDir)) {
@@ -81,8 +88,32 @@ public class MapFromSynthea extends AbstractSyntheaDataMapper {
                 extractPatient(bundle, patientWriter);
                 extractEncounter(bundle, encounterWriter);
                 extractObservation(bundle, observationWriter);
+                extractMedicationAdministration(bundle, medicationAdministrationWriter);
             }
         }
+    }
+
+    private static void extractMedicationAdministration(Bundle bundle, PrintWriter writer) {
+        List<String> data = new LinkedList<>();
+        bundle.getEntry().stream()
+                .filter(e -> e.getResource().fhirType().equals("MedicationAdministration"))
+                .map(e -> (MedicationAdministration) e.getResource())
+                .forEach(medicationAdministration -> {
+                    data.clear();
+                    data.add(getCustomMedicationAdministrationId(medicationAdministration));
+                    data.add(medicationAdministration.getStatus().getDisplay());
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(medicationAdministration.getEffectiveDateTimeType().getValue()));
+                    data.add(getCustomPatientId(medicationAdministration));
+                    data.add(getCustomEncounterId(medicationAdministration));
+
+                    Coding medicationCoding = medicationAdministration.getMedicationCodeableConcept().getCodingFirstRep();
+                    data.add(medicationCoding.getCode());
+                    data.add(medicationCoding.getSystem());
+                    data.add(medicationCoding.getDisplay());
+
+                    writer.println(data.stream().collect(Collectors.joining("\t")));
+                    data.clear();
+                });
     }
 
     private static void extractObservation(Bundle bundle, PrintWriter writer) {
@@ -91,6 +122,7 @@ public class MapFromSynthea extends AbstractSyntheaDataMapper {
                 .filter(e -> e.getResource().fhirType().equals("Observation"))
                 .map(e -> (Observation) e.getResource())
                 .forEach(observation -> {
+                    data.clear();
                     data.add(getCustomObservationId(observation));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(observation.getEffectiveDateTimeType().getValue()));
                     data.add(getCustomPatientId(observation));
@@ -121,6 +153,7 @@ public class MapFromSynthea extends AbstractSyntheaDataMapper {
                 .filter(e -> e.getResource().fhirType().equals("Encounter"))
                 .map(e -> (Encounter) e.getResource())
                 .forEach(encounter -> {
+                    data.clear();
                     data.add(getCustomEncounterId(encounter));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getStart()));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getEnd()));
@@ -141,6 +174,7 @@ public class MapFromSynthea extends AbstractSyntheaDataMapper {
                 .filter(e -> e.getResource().fhirType().equals("Patient"))
                 .map(e -> (Patient) e.getResource())
                 .forEach(patient -> {
+                    data.clear();
                     data.add(getCustomPatientId(patient));
                     data.add(DateFormats.MM_DD_YYYY.format(patient.getBirthDate()));
                     data.add(patient.getNameFirstRep().getFamily());
