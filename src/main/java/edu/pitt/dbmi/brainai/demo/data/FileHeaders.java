@@ -70,6 +70,19 @@ public final class FileHeaders {
         "med_display"
     };
 
+    public static String[] LOCATION = {
+        "LOCATION_ID",
+        "name",
+        "address",
+        "city",
+        "state",
+        "zip",
+        "status",
+        "type_code",
+        "type_system",
+        "type_display"
+    };
+
     private FileHeaders() {
     }
 

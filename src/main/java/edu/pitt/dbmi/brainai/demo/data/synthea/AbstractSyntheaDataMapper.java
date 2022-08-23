@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Encounter;
+import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.MedicationAdministration;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
@@ -54,11 +55,13 @@ public class AbstractSyntheaDataMapper {
     protected static final Map<String, String> syntheaToCustomEncounterId = new HashMap<>();
     protected static final Map<String, String> syntheaToCustomObservationId = new HashMap<>();
     protected static final Map<String, String> syntheaToCustomMedicationAdministrationId = new HashMap<>();
+    protected static final Map<String, String> syntheaToCustomLocationId = new HashMap<>();
 
     private static int patientIdCounter = 0;
     private static int encounterIdCounter = 0;
     private static int observationIdCounter = 0;
     private static int medicationAdministrationIdCounter = 0;
+    private static int locationIdCounter = 0;
 
     public AbstractSyntheaDataMapper() {
     }
@@ -68,7 +71,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static Bundle getBundle(Path file) throws IOException {
-        try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+        try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
             return (Bundle) JSON_PARSER.parseResource(reader);
         }
     }
@@ -88,6 +91,15 @@ public class AbstractSyntheaDataMapper {
         }
 
         return syntheaToCustomEncounterId.get(id);
+    }
+
+    protected static String createCustomLocationId(IdType idType) {
+        String id = extractId(idType.getIdPart());
+        if (!syntheaToCustomLocationId.containsKey(id)) {
+            syntheaToCustomLocationId.put(id, String.format("location_%d", ++locationIdCounter));
+        }
+
+        return syntheaToCustomLocationId.get(id);
     }
 
     protected static String getCustomMedicationAdministrationId(MedicationAdministration medicationAdministration) {

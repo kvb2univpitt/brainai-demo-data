@@ -19,6 +19,7 @@
 package edu.pitt.dbmi.brainai.demo.data.synthea;
 
 import edu.pitt.dbmi.brainai.demo.data.FileHeaders;
+import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.createCustomLocationId;
 import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.getBundle;
 import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.toLineHeader;
 import edu.pitt.dbmi.brainai.demo.data.utils.DateFormats;
@@ -33,11 +34,14 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.hl7.fhir.r4.model.Address;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Encounter;
+import org.hl7.fhir.r4.model.Location;
 import org.hl7.fhir.r4.model.MedicationAdministration;
 import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.Organization;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Quantity;
 import org.hl7.fhir.r4.model.Type;
@@ -61,6 +65,7 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
     private static int totalNumOfEncounters = 0;
     private static int totalNumOfObservations = 0;
     private static int totalNumOfMedicationAdministrations = 0;
+    private static int totalNumOfLocations = 0;
 
     /**
      * @param args the command line arguments
@@ -87,12 +92,14 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
         try (PrintWriter patientWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "patients.tsv")));
                 PrintWriter encounterWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "encounters.tsv")));
                 PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")));
-                PrintWriter medicationAdministrationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "medication_administrations.tsv")))) {
+                PrintWriter medicationAdministrationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "medication_administrations.tsv")));
+                PrintWriter locationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "locations.tsv")))) {
             // write out headers
             patientWriter.println(toLineHeader(FileHeaders.PATIENT));
             encounterWriter.println(toLineHeader(FileHeaders.ENCOUNTER));
             observationWriter.println(toLineHeader(FileHeaders.OBSERVATION));
             medicationAdministrationWriter.println(toLineHeader(FileHeaders.MEDICATION_ADMINISTRATION));
+            locationWriter.println(toLineHeader(FileHeaders.LOCATION));
 
             // write out data
             int count = 0;
@@ -103,6 +110,8 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
 
                 Bundle bundle = getBundle(file);
                 List<String> data = new LinkedList<>();
+
+                createLocation(bundle, data, locationWriter);
 
                 Patient patient = getPatient(bundle);
                 exportPatient(patient, data, patientWriter);
@@ -131,6 +140,50 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
         System.out.printf("Encounters: %d%n", totalNumOfEncounters);
         System.out.printf("Observations: %d%n", totalNumOfObservations);
         System.out.printf("Medication Administration: %d%n", totalNumOfMedicationAdministrations);
+        System.out.printf("Locations: %d%n", totalNumOfLocations);
+    }
+
+    private static void createLocation(Bundle bundle, List<String> data, PrintWriter writer) {
+        List<Organization> organizations = bundle.getEntry().stream()
+                .filter(e -> e.getResource().fhirType().equals("Organization"))
+                .map(e -> (Organization) e.getResource()).collect(Collectors.toList());
+
+        int count = 0;
+        int limit = 3;
+        for (Organization organization : organizations) {
+            data.add(createCustomLocationId(organization.getIdElement()));
+            data.add(organization.getName());
+
+            Address address = organization.getAddressFirstRep();
+            data.add(address.getText());
+            data.add(address.getCity());
+            data.add(address.getState());
+            data.add(address.getPostalCode());
+            data.add(Location.LocationStatus.ACTIVE.toString());
+
+            switch (count % limit) {
+                case 0 -> {
+                    data.add("INLAB");
+                    data.add("inpatient laboratory");
+                    data.add("A location that plays the role of delivering services which may include tests are done on clinical specimens to get health information about a patient pertaining to the diagnosis, treatment, and prevention of disease for a hospital visit longer than one day.");
+                }
+                case 1 -> {
+                    data.add("PEDICU");
+                    data.add("Pediatric intensive care unit");
+                    data.add("");
+                }
+                default -> {
+                    data.add("ICU");
+                    data.add("Intensive care unit");
+                    data.add("");
+                }
+            }
+
+            writer.println(data.stream().collect(Collectors.joining("\t")));
+            data.clear();
+            count++;
+        }
+        totalNumOfLocations += count;
     }
 
     private static boolean hasMedicationAdministration(Bundle bundle) {
@@ -244,7 +297,7 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
     }
 
     private static void exportPatient(Patient patient, List<String> data, PrintWriter writer) {
-        export(patient, data, writer);;
+        export(patient, data, writer);
     }
 
     private static void export(MedicationAdministration medicationAdministration, List<String> data, PrintWriter writer) {
