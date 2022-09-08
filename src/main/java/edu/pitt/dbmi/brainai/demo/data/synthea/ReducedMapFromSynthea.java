@@ -19,9 +19,6 @@
 package edu.pitt.dbmi.brainai.demo.data.synthea;
 
 import edu.pitt.dbmi.brainai.demo.data.FileHeaders;
-import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.createCustomLocationId;
-import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.getBundle;
-import static edu.pitt.dbmi.brainai.demo.data.synthea.AbstractSyntheaDataMapper.toLineHeader;
 import edu.pitt.dbmi.brainai.demo.data.utils.DateFormats;
 import edu.pitt.dbmi.brainai.demo.data.utils.FileUtils;
 import java.io.IOException;
@@ -29,10 +26,15 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Address;
 import org.hl7.fhir.r4.model.Bundle;
@@ -66,6 +68,7 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
     private static int totalNumOfObservations = 0;
     private static int totalNumOfMedicationAdministrations = 0;
     private static int totalNumOfLocations = 0;
+    private static int totalNumOfEncounterLocations = 0;
 
     /**
      * @param args the command line arguments
@@ -84,106 +87,441 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
         } catch (IOException exception) {
             exception.printStackTrace(System.err);
         }
-        System.out.println("================================================================================");
-    }
-
-    private static void map(Path dataDir, Path outDir) throws IOException {
-        String dirOut = outDir.toString();
-        try (PrintWriter patientWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "patients.tsv")));
-                PrintWriter encounterWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "encounters.tsv")));
-                PrintWriter observationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "observations.tsv")));
-                PrintWriter medicationAdministrationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "medication_administrations.tsv")));
-                PrintWriter locationWriter = new PrintWriter(Files.newOutputStream(Paths.get(dirOut, "locations.tsv")))) {
-            // write out headers
-            patientWriter.println(toLineHeader(FileHeaders.PATIENT));
-            encounterWriter.println(toLineHeader(FileHeaders.ENCOUNTER));
-            observationWriter.println(toLineHeader(FileHeaders.OBSERVATION));
-            medicationAdministrationWriter.println(toLineHeader(FileHeaders.MEDICATION_ADMINISTRATION));
-            locationWriter.println(toLineHeader(FileHeaders.LOCATION));
-
-            // write out data
-            int count = 0;
-            for (Path file : FileUtils.listFiles(dataDir)) {
-                if (count >= MAX_NUM_PATIENTS) {
-                    break;
-                }
-
-                Bundle bundle = getBundle(file);
-                List<String> data = new LinkedList<>();
-
-                createLocation(bundle, data, locationWriter);
-
-                Patient patient = getPatient(bundle);
-                exportPatient(patient, data, patientWriter);
-                if (hasMedicationAdministration(bundle)) {
-                    Map<String, Encounter> encountersFromIds = getEncountersFromIds(bundle);
-                    Map<String, List<Observation>> encounterObservations = getEncounterObservations(bundle);
-                    Map<String, List<MedicationAdministration>> encounterMedicationAdministrations = getEncounterMedicationAdministrations(bundle);
-
-                    List<Encounter> exportedEncounters = exportEncounters(encountersFromIds, encounterObservations, encounterMedicationAdministrations, data, encounterWriter);
-                    exportObservations(encounterObservations, exportedEncounters, data, observationWriter);
-                    exportMedicationAdministrations(encounterMedicationAdministrations, exportedEncounters, data, medicationAdministrationWriter);
-                } else {
-                    Map<String, Encounter> encountersFromIds = getEncountersFromIds(bundle);
-                    Map<String, List<Observation>> encounterObservations = getEncounterObservations(bundle);
-
-                    List<Encounter> exportedEncounters = exportEncounters(encountersFromIds, encounterObservations, data, encounterWriter);
-                    exportObservations(encounterObservations, exportedEncounters, data, observationWriter);
-                }
-
-                count++;
-                totalNumOfPatients++;
-            }
-        }
-
         System.out.printf("Patients: %d%n", totalNumOfPatients);
         System.out.printf("Encounters: %d%n", totalNumOfEncounters);
         System.out.printf("Observations: %d%n", totalNumOfObservations);
         System.out.printf("Medication Administration: %d%n", totalNumOfMedicationAdministrations);
         System.out.printf("Locations: %d%n", totalNumOfLocations);
+        System.out.printf("Encounter Locations: %d%n", totalNumOfEncounterLocations);
+        System.out.println("================================================================================");
     }
 
-    private static void createLocation(Bundle bundle, List<String> data, PrintWriter writer) {
-        List<Organization> organizations = bundle.getEntry().stream()
-                .filter(e -> e.getResource().fhirType().equals("Organization"))
-                .map(e -> (Organization) e.getResource()).collect(Collectors.toList());
+    private static void map(Path dataDir, Path outDir) throws IOException {
+        List<Bundle> bundles = getBundles(dataDir);
+        Map<String, Patient> patients = getPatients(bundles);
+        Map<String, List<Encounter>> patientEncounters = getPatientEncounters(bundles, patients.keySet());
+        Map<String, List<Observation>> encounterObservations = getEncounterObservations(bundles, patientEncounters);
+        Map<String, List<MedicationAdministration>> encounterMedicationAdministrations = getEncounterMedicationAdministrations(bundles, encounterObservations);
+        List<Organization> organizations = getOrganization(bundles, patientEncounters);
 
-        int count = 0;
-        int limit = 3;
-        for (Organization organization : organizations) {
-            data.add(createCustomLocationId(organization.getIdElement()));
-            data.add(organization.getName());
+        List<String> data = new LinkedList<>();  // used for construction line for export
+        exportPatients(patients, data, outDir);
+        exportEncounters(patientEncounters, data, outDir);
+        exportObservations(encounterObservations, data, outDir);
+        exportMedicationAdministration(encounterMedicationAdministrations, data, outDir);
+        exportLocationDerivedFromOrganizations(organizations, data, outDir);
+        exportEncounterLocations(patientEncounters, data, outDir);
+    }
 
-            Address address = organization.getAddressFirstRep();
-            data.add(address.getText());
-            data.add(address.getCity());
-            data.add(address.getState());
-            data.add(address.getPostalCode());
-            data.add(Location.LocationStatus.ACTIVE.toString());
+    private static void exportEncounterLocations(Map<String, List<Encounter>> patientEncounters, List<String> data, Path outDir) throws IOException {
+        try (PrintWriter writer = new PrintWriter(Files.newOutputStream(Paths.get(outDir.toString(), "encounter_locations.tsv")))) {
+            // write out header
+            writer.println(toLineHeader(FileHeaders.ENCOUNTER_LOCATION));
 
-            switch (count % limit) {
-                case 0 -> {
-                    data.add("INLAB");
-                    data.add("inpatient laboratory");
-                    data.add("A location that plays the role of delivering services which may include tests are done on clinical specimens to get health information about a patient pertaining to the diagnosis, treatment, and prevention of disease for a hospital visit longer than one day.");
+            for (List<Encounter> encounters : patientEncounters.values()) {
+                for (Encounter encounter : encounters) {
+                    Date start = encounter.getPeriod().getStart();
+                    Date end = encounter.getPeriod().getEnd();
+                    String encounterId = getCustomEncounterId(encounter);
+
+                    long duration = TimeUnit.MILLISECONDS.toHours(end.getTime() - start.getTime());
+                    if (duration > 10) {
+                        Calendar calendar = Calendar.getInstance();
+                        calendar.setTime(start);
+                        calendar.add(Calendar.HOUR_OF_DAY, 2);
+                        Date midDate = calendar.getTime();
+
+                        data.clear();
+                        data.add(encounterId);
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+                        data.add("location_5");
+                        writer.println(data.stream().collect(Collectors.joining("\t")));
+                        totalNumOfEncounterLocations++;
+
+                        calendar.setTime(midDate);
+                        calendar.add(Calendar.HOUR_OF_DAY, 1);
+                        midDate = calendar.getTime();
+
+                        calendar.setTime(midDate);
+                        calendar.add(Calendar.HOUR_OF_DAY, 3);
+                        Date midDate2 = calendar.getTime();
+
+                        data.clear();
+                        data.add(encounterId);
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate2));
+                        data.add("location_4");
+                        writer.println(data.stream().collect(Collectors.joining("\t")));
+                        totalNumOfEncounterLocations++;
+
+                        calendar.setTime(midDate2);
+                        calendar.add(Calendar.HOUR_OF_DAY, 1);
+                        midDate = calendar.getTime();
+
+                        data.clear();
+                        data.add(encounterId);
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
+                        data.add("location_8");
+                        writer.println(data.stream().collect(Collectors.joining("\t")));
+                        totalNumOfEncounterLocations++;
+                    } else if (duration > 5) {
+                        Calendar calendar = Calendar.getInstance();
+                        calendar.setTime(start);
+                        calendar.add(Calendar.HOUR_OF_DAY, 3);
+                        Date midDate = calendar.getTime();
+
+                        data.clear();
+                        data.add(encounterId);
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+                        data.add("location_1");
+                        writer.println(data.stream().collect(Collectors.joining("\t")));
+                        totalNumOfEncounterLocations++;
+
+                        calendar.setTime(midDate);
+                        calendar.add(Calendar.HOUR_OF_DAY, 1);
+                        midDate = calendar.getTime();
+
+                        data.clear();
+                        data.add(encounterId);
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
+                        data.add("location_3");
+                        writer.println(data.stream().collect(Collectors.joining("\t")));
+                        totalNumOfEncounterLocations++;
+                    } else {
+                        data.clear();
+                        data.add(encounterId);
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
+                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
+                        data.add(syntheaToCustomLocationId.get(encounter.getServiceProvider().getReference()));
+                        writer.println(data.stream().collect(Collectors.joining("\t")));
+                        totalNumOfEncounterLocations++;
+                    }
                 }
-                case 1 -> {
-                    data.add("PEDICU");
-                    data.add("Pediatric intensive care unit");
-                    data.add("");
+            }
+        }
+    }
+
+    private static void exportLocationDerivedFromOrganizations(List<Organization> organizations, List<String> data, Path outDir) throws IOException {
+        try (PrintWriter writer = new PrintWriter(Files.newOutputStream(Paths.get(outDir.toString(), "locations.tsv")))) {
+            // write out header
+            writer.println(toLineHeader(FileHeaders.LOCATION));
+
+            int count = 0;
+            int limit = 3;
+            for (Organization organization : organizations) {
+                data.clear();
+                data.add(createCustomLocationId(organization.getIdElement()));
+                data.add(organization.getName());
+
+                Address address = organization.getAddressFirstRep();
+                data.add(address.getText());
+                data.add(address.getCity());
+                data.add(address.getState());
+                data.add(address.getPostalCode());
+                data.add(Location.LocationStatus.ACTIVE.toString());
+
+                switch (count % limit) {
+                    case 0 -> {
+                        data.add("INLAB");
+                        data.add("inpatient laboratory");
+                        data.add("A location that plays the role of delivering services which may include tests are done on clinical specimens to get health information about a patient pertaining to the diagnosis, treatment, and prevention of disease for a hospital visit longer than one day.");
+                    }
+                    case 1 -> {
+                        data.add("PEDICU");
+                        data.add("Pediatric intensive care unit");
+                        data.add("");
+                    }
+                    default -> {
+                        data.add("ICU");
+                        data.add("Intensive care unit");
+                        data.add("");
+                    }
                 }
-                default -> {
-                    data.add("ICU");
-                    data.add("Intensive care unit");
-                    data.add("");
+
+                writer.println(data.stream().collect(Collectors.joining("\t")));
+                totalNumOfLocations++;
+            }
+        }
+    }
+
+    private static void exportMedicationAdministration(Map<String, List<MedicationAdministration>> encounterMedicationAdministrations, List<String> data, Path outDir) throws IOException {
+        try (PrintWriter writer = new PrintWriter(Files.newOutputStream(Paths.get(outDir.toString(), "medication_administrations.tsv")))) {
+            // write out header
+            writer.println(toLineHeader(FileHeaders.MEDICATION_ADMINISTRATION));
+
+            for (List<MedicationAdministration> medicationAdministrations : encounterMedicationAdministrations.values()) {
+                for (MedicationAdministration medicationAdministration : medicationAdministrations) {
+                    data.clear();
+                    data.add(getCustomMedicationAdministrationId(medicationAdministration));
+                    data.add(medicationAdministration.getStatus().getDisplay());
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(medicationAdministration.getEffectiveDateTimeType().getValue()));
+                    data.add(getCustomPatientId(medicationAdministration));
+                    data.add(getCustomEncounterId(medicationAdministration));
+
+                    Coding medicationCoding = medicationAdministration.getMedicationCodeableConcept().getCodingFirstRep();
+                    data.add(medicationCoding.getCode());
+                    data.add(medicationCoding.getSystem());
+                    data.add(medicationCoding.getDisplay());
+
+                    writer.println(data.stream().collect(Collectors.joining("\t")));
+                    totalNumOfMedicationAdministrations++;
+                }
+            }
+        }
+    }
+
+    private static void exportObservations(Map<String, List<Observation>> encounterObservations, List<String> data, Path outDir) throws IOException {
+        try (PrintWriter writer = new PrintWriter(Files.newOutputStream(Paths.get(outDir.toString(), "observations.tsv")))) {
+            // write out header
+            writer.println(toLineHeader(FileHeaders.OBSERVATION));
+
+            for (List<Observation> observations : encounterObservations.values()) {
+                for (Observation observation : observations) {
+                    data.clear();
+                    data.add(getCustomObservationId(observation));
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(observation.getEffectiveDateTimeType().getValue()));
+                    data.add(getCustomPatientId(observation));
+                    data.add(getCustomEncounterId(observation));
+                    data.add(observation.getCode().getCodingFirstRep().getCode());
+                    data.add(observation.getCode().getCodingFirstRep().getDisplay());
+
+                    Type type = observation.getValue();
+                    if (type == null || !(type instanceof Quantity)) {
+                        data.add("");
+                        data.add("");
+                        data.add("");
+                    } else {
+                        data.add(observation.getValueQuantity().getValue().toString());
+                        data.add(observation.getValueQuantity().getUnit());
+                        data.add("numeric");
+                    }
+                    data.add("laboratory");
+
+                    writer.println(data.stream().collect(Collectors.joining("\t")));
+                    totalNumOfObservations++;
+                }
+            }
+        }
+    }
+
+    private static void exportEncounters(Map<String, List<Encounter>> patientEncounters, List<String> data, Path outDir) throws IOException {
+        try (PrintWriter writer = new PrintWriter(Files.newOutputStream(Paths.get(outDir.toString(), "encounters.tsv")))) {
+            // write out header
+            writer.println(toLineHeader(FileHeaders.ENCOUNTER));
+
+            for (List<Encounter> encounters : patientEncounters.values()) {
+                for (Encounter encounter : encounters) {
+                    data.clear();
+                    data.add(getCustomEncounterId(encounter));
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getStart()));
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getEnd()));
+                    data.add(getCustomPatientId(encounter));
+                    data.add("394656005");
+                    data.add("Inpatient");
+                    data.add("126598008");
+                    data.add("Neoplasm of connective tissues disorder");
+
+                    writer.println(data.stream().collect(Collectors.joining("\t")));
+                    totalNumOfEncounters++;
+                }
+            }
+        }
+    }
+
+    private static void exportPatients(Map<String, Patient> patients, List<String> data, Path outDir) throws IOException {
+        try (PrintWriter writer = new PrintWriter(Files.newOutputStream(Paths.get(outDir.toString(), "patients.tsv")))) {
+            // write out header
+            writer.println(toLineHeader(FileHeaders.PATIENT));
+
+            for (Patient patient : patients.values()) {
+                data.clear();
+                data.add(getCustomPatientId(patient));
+                data.add(DateFormats.MM_DD_YYYY.format(patient.getBirthDate()));
+                data.add(patient.getNameFirstRep().getFamily());
+                data.add(patient.getNameFirstRep().getGiven().get(0).getValueAsString());
+                data.add(getValue(patient.getGender().toCode(), "female"));
+                data.add(getValue(patient.getAddressFirstRep().getText(), "4200 Fifth Ave"));
+                data.add(getValue(patient.getAddressFirstRep().getCity(), "Pittsburgh"));
+                data.add(getValue(patient.getAddressFirstRep().getState(), "Pennsylvania"));
+                data.add(getValue(patient.getAddressFirstRep().getPostalCode(), "15260"));
+
+                writer.println(data.stream().collect(Collectors.joining(DATA_DELIMITER)));
+                totalNumOfPatients++;
+            }
+        }
+    }
+
+    private static List<Organization> getOrganization(List<Bundle> bundles, Map<String, List<Encounter>> patientEncounters) {
+        List<Organization> organizations = new LinkedList<>();
+
+        // get unique organization IDs from encounters
+        Set<String> organizationIds = new HashSet<>();
+        for (List<Encounter> encounters : patientEncounters.values()) {
+            encounters.forEach(encounter -> organizationIds.add(encounter.getServiceProvider().getReference()));
+        }
+
+        for (Bundle bundle : bundles) {
+            for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
+                if (entry.getResource().fhirType().equals("Organization")) {
+                    Organization organization = (Organization) entry.getResource();
+                    String organizationId = organization.getIdElement().getIdPart();
+                    if (organizationIds.contains(organizationId)) {
+                        organizations.add(organization);
+                    }
+                }
+            }
+        }
+
+        return organizations;
+    }
+
+    private static Map<String, List<MedicationAdministration>> getEncounterMedicationAdministrations(List<Bundle> bundles, Map<String, List<Observation>> encounterObservations) {
+        Map<String, List<MedicationAdministration>> encounterMedicationAdministrations = new HashMap<>();
+
+        // initialize encounter-medication-administration list with empty lists
+        for (String encounterId : encounterObservations.keySet()) {
+            encounterMedicationAdministrations.put(encounterId, new LinkedList<>());
+        }
+
+        for (Bundle bundle : bundles) {
+            for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
+                if (entry.getResource().fhirType().equals("MedicationAdministration")) {
+                    MedicationAdministration medicationAdministration = (MedicationAdministration) entry.getResource();
+                    String encounterId = medicationAdministration.getContext().getReference();
+                    List<MedicationAdministration> medicationAdministrations = encounterMedicationAdministrations.get(encounterId);
+                    if (medicationAdministrations != null && medicationAdministrations.size() < MAX_NUM_MEDICATION_ADMINISTRATION) {
+                        medicationAdministrations.add(medicationAdministration);
+                    }
+                }
+            }
+        }
+
+        return encounterMedicationAdministrations;
+    }
+
+    private static Map<String, List<Observation>> getEncounterObservations(List<Bundle> bundles, Map<String, List<Encounter>> patientEncounters) {
+        Map<String, List<Observation>> encounterObservations = new HashMap<>();
+
+        // initialize encounter-observation list with empty lists
+        for (List<Encounter> encounters : patientEncounters.values()) {
+            encounters.forEach(encounter -> encounterObservations.put(encounter.getIdElement().getIdPart(), new LinkedList<>()));
+        }
+
+        for (Bundle bundle : bundles) {
+            for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
+                if (entry.getResource().fhirType().equals("Observation")) {
+                    Observation observation = (Observation) entry.getResource();
+                    String encounterId = observation.getEncounter().getReference();
+                    List<Observation> observations = encounterObservations.get(encounterId);
+                    if (observations != null && observations.size() < MAX_NUM_OBSERVATIONS) {
+                        observations.add(observation);
+                    }
+                }
+            }
+        }
+
+        return encounterObservations;
+    }
+
+    private static Map<String, List<Encounter>> getPatientEncounters(List<Bundle> bundles, Set<String> patientIds) {
+        Map<String, List<Encounter>> patientEncounters = new HashMap<>();
+
+        // initialize patient-encounter list with empty lists
+        patientIds.forEach(patientId -> patientEncounters.put(patientId, new LinkedList<>()));
+
+        for (Bundle bundle : bundles) {
+            // get encounter IDs of encounters that have medication adminstration
+            Set<String> medAdminEncounterIds = bundle.getEntry().stream()
+                    .filter(e -> e.getResource().fhirType().equals("MedicationAdministration"))
+                    .map(e -> (MedicationAdministration) e.getResource())
+                    .map(e -> e.getContext().getReference())
+                    .collect(Collectors.toSet());
+
+            // get encounter IDs of encounters that have observations without medication adminstration
+            Set<String> observationEncounterIds = bundle.getEntry().stream()
+                    .filter(e -> e.getResource().fhirType().equals("Observation"))
+                    .map(e -> (Observation) e.getResource())
+                    .map(e -> e.getEncounter().getReference())
+                    .filter(e -> !medAdminEncounterIds.contains(e))
+                    .collect(Collectors.toSet());
+
+            // extract encounters
+            List<Encounter> medAdminEncounters = new LinkedList<>();
+            List<Encounter> observationEncounters = new LinkedList<>();
+            List<Encounter> regularEncounters = new LinkedList<>();
+            for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
+                if (entry.getResource().fhirType().equals("Encounter")) {
+                    Encounter encounter = (Encounter) entry.getResource();
+                    String encounterId = encounter.getIdElement().getIdPart();
+                    if (medAdminEncounterIds.contains(encounterId)) {
+                        medAdminEncounters.add(encounter);
+                    } else if (observationEncounterIds.contains(encounterId)) {
+                        observationEncounters.add(encounter);
+                    } else {
+                        regularEncounters.add(encounter);
+                    }
                 }
             }
 
-            writer.println(data.stream().collect(Collectors.joining("\t")));
-            data.clear();
-            count++;
+            for (Encounter encounter : medAdminEncounters) {
+                String patientId = encounter.getSubject().getReference();
+                List<Encounter> encounters = patientEncounters.get(patientId);
+                if (encounters != null && encounters.size() < MAX_NUM_ENCOUNTERS) {
+                    encounters.add(encounter);
+                }
+            }
+            for (Encounter encounter : observationEncounters) {
+                String patientId = encounter.getSubject().getReference();
+                List<Encounter> encounters = patientEncounters.get(patientId);
+                if (encounters != null && encounters.size() < MAX_NUM_ENCOUNTERS) {
+                    encounters.add(encounter);
+                }
+            }
+            for (Encounter encounter : regularEncounters) {
+                String patientId = encounter.getSubject().getReference();
+                List<Encounter> encounters = patientEncounters.get(patientId);
+                if (encounters != null && encounters.size() < MAX_NUM_ENCOUNTERS) {
+                    encounters.add(encounter);
+                }
+            }
         }
-        totalNumOfLocations += count;
+
+        return patientEncounters;
+    }
+
+    private static Map<String, Patient> getPatients(List<Bundle> bundles) {
+        Map<String, Patient> patients = new HashMap<>();
+
+        int count = 0;
+        for (Bundle bundle : bundles) {
+            if (count >= MAX_NUM_PATIENTS) {
+                break;
+            }
+
+            Patient patient = bundle.getEntry().stream()
+                    .filter(e -> e.getResource().fhirType().equals("Patient"))
+                    .map(e -> (Patient) e.getResource())
+                    .findFirst().orElse(null);
+            if (patient != null) {
+                patients.put(patient.getIdElement().getIdPart(), patient);
+                count++;
+            }
+        }
+
+        return patients;
+    }
+
+    private static List<Bundle> getBundles(Path dataDir) throws IOException {
+        List<Bundle> bundles = new LinkedList<>();
+        for (Path file : FileUtils.listFiles(dataDir)) {
+            bundles.add(getBundle(file));
+        }
+
+        return bundles;
     }
 
     private static boolean hasMedicationAdministration(Bundle bundle) {
@@ -192,251 +530,6 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
                 .findFirst().orElse(null);
 
         return (entryComponent != null);
-    }
-
-    private static List<MedicationAdministration> exportMedicationAdministrations(
-            Map<String, List<MedicationAdministration>> encounterMedicationAdministrations,
-            List<Encounter> exportedEncounters,
-            List<String> data,
-            PrintWriter writer) {
-        List<MedicationAdministration> exportedMedicationAdministrations = new LinkedList<>();
-
-        for (Encounter encounter : exportedEncounters) {
-            String encounterId = encounter.getIdElement().getIdPart();
-
-            int count = 0;
-            for (MedicationAdministration medicationAdministration : encounterMedicationAdministrations.get(encounterId)) {
-                if (count >= MAX_NUM_MEDICATION_ADMINISTRATION) {
-                    break;
-                }
-
-                export(medicationAdministration, data, writer);
-                exportedMedicationAdministrations.add(medicationAdministration);
-                count++;
-            }
-            totalNumOfMedicationAdministrations += count;
-        }
-
-        return exportedMedicationAdministrations;
-    }
-
-    private static List<Observation> exportObservations(
-            Map<String, List<Observation>> encounterObservations,
-            List<Encounter> exportedEncounters,
-            List<String> data,
-            PrintWriter writer) {
-        List<Observation> exportedObservations = new LinkedList<>();
-
-        for (Encounter encounter : exportedEncounters) {
-            String encounterId = encounter.getIdElement().getIdPart();
-
-            int count = 0;
-            for (Observation observation : encounterObservations.get(encounterId)) {
-                if (count >= MAX_NUM_OBSERVATIONS) {
-                    break;
-                }
-
-                export(observation, data, writer);
-                exportedObservations.add(observation);
-                count++;
-            }
-            totalNumOfObservations += count;
-        }
-
-        return exportedObservations;
-    }
-
-    private static List<Encounter> exportEncounters(
-            Map<String, Encounter> encountersFromIds,
-            Map<String, List<Observation>> encounterObservations,
-            Map<String, List<MedicationAdministration>> encounterMedicationAdministrations,
-            List<String> data,
-            PrintWriter writer) {
-        List<Encounter> exportedEncounters = new LinkedList<>();
-
-        int count = 0;
-        for (String encounterId : encounterMedicationAdministrations.keySet()) {
-            if (count >= MAX_NUM_ENCOUNTERS) {
-                break;
-            }
-
-            if (encounterObservations.containsKey(encounterId)) {
-                Encounter encounter = encountersFromIds.get(encounterId);
-                exportedEncounters.add(encounter);
-                export(encounter, data, writer);
-                count++;
-            }
-        }
-        totalNumOfEncounters += count;
-
-        return exportedEncounters;
-    }
-
-    private static List<Encounter> exportEncounters(
-            Map<String, Encounter> encountersFromIds,
-            Map<String, List<Observation>> encounterObservations,
-            List<String> data,
-            PrintWriter writer) {
-        List<Encounter> exportedEncounters = new LinkedList<>();
-
-        int count = 0;
-        for (String encounterId : encounterObservations.keySet()) {
-            if (count >= MAX_NUM_ENCOUNTERS) {
-                break;
-            }
-
-            Encounter encounter = encountersFromIds.get(encounterId);
-            exportedEncounters.add(encounter);
-            export(encounter, data, writer);
-            count++;
-
-        }
-        totalNumOfEncounters += count;
-
-        return exportedEncounters;
-    }
-
-    private static void exportPatient(Patient patient, List<String> data, PrintWriter writer) {
-        export(patient, data, writer);
-    }
-
-    private static void export(MedicationAdministration medicationAdministration, List<String> data, PrintWriter writer) {
-        data.clear();
-        data.add(getCustomMedicationAdministrationId(medicationAdministration));
-        data.add(medicationAdministration.getStatus().getDisplay());
-        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(medicationAdministration.getEffectiveDateTimeType().getValue()));
-        data.add(getCustomPatientId(medicationAdministration));
-        data.add(getCustomEncounterId(medicationAdministration));
-
-        Coding medicationCoding = medicationAdministration.getMedicationCodeableConcept().getCodingFirstRep();
-        data.add(medicationCoding.getCode());
-        data.add(medicationCoding.getSystem());
-        data.add(medicationCoding.getDisplay());
-
-        writer.println(data.stream().collect(Collectors.joining("\t")));
-        data.clear();
-    }
-
-    private static void export(Observation observation, List<String> data, PrintWriter writer) {
-        data.clear();
-        data.add(getCustomObservationId(observation));
-        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(observation.getEffectiveDateTimeType().getValue()));
-        data.add(getCustomPatientId(observation));
-        data.add(getCustomEncounterId(observation));
-        data.add(observation.getCode().getCodingFirstRep().getCode());
-        data.add(observation.getCode().getCodingFirstRep().getDisplay());
-
-        Type type = observation.getValue();
-        if (type == null || !(type instanceof Quantity)) {
-            data.add("");
-            data.add("");
-            data.add("");
-        } else {
-            data.add(observation.getValueQuantity().getValue().toString());
-            data.add(observation.getValueQuantity().getUnit());
-            data.add("numeric");
-        }
-        data.add("laboratory");
-
-        writer.println(data.stream().collect(Collectors.joining("\t")));
-        data.clear();
-    }
-
-    private static void export(Encounter encounter, List<String> data, PrintWriter writer) {
-        data.clear();
-        data.add(getCustomEncounterId(encounter));
-        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getStart()));
-        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getEnd()));
-        data.add(getCustomPatientId(encounter));
-        data.add("394656005");
-        data.add("Inpatient");
-        data.add("126598008");
-        data.add("Neoplasm of connective tissues disorder");
-
-        writer.println(data.stream().collect(Collectors.joining("\t")));
-        data.clear();
-    }
-
-    private static void export(Patient patient, List<String> data, PrintWriter writer) {
-        data.clear();
-        data.add(getCustomPatientId(patient));
-        data.add(DateFormats.MM_DD_YYYY.format(patient.getBirthDate()));
-        data.add(patient.getNameFirstRep().getFamily());
-        data.add(patient.getNameFirstRep().getGiven().get(0).getValueAsString());
-        data.add(getValue(patient.getGender().toCode(), "female"));
-        data.add(getValue(patient.getAddressFirstRep().getText(), "4200 Fifth Ave"));
-        data.add(getValue(patient.getAddressFirstRep().getCity(), "Pittsburgh"));
-        data.add(getValue(patient.getAddressFirstRep().getState(), "Pennsylvania"));
-        data.add(getValue(patient.getAddressFirstRep().getPostalCode(), "15260"));
-
-        writer.println(data.stream().collect(Collectors.joining(DATA_DELIMITER)));
-        data.clear();
-    }
-
-    private static Map<String, List<MedicationAdministration>> getEncounterMedicationAdministrations(Bundle bundle) {
-        Map<String, List<MedicationAdministration>> encounterMedicationAdministrations = new HashMap<>();
-
-        bundle.getEntry().stream()
-                .filter(e -> e.getResource().fhirType().equals("MedicationAdministration"))
-                .map(e -> (MedicationAdministration) e.getResource())
-                .forEach(medicationAdministration -> {
-                    String encounterId = medicationAdministration.getContext().getReference();
-                    List<MedicationAdministration> medicationAdministrations = encounterMedicationAdministrations.get(encounterId);
-                    if (medicationAdministrations == null) {
-                        medicationAdministrations = new LinkedList<>();
-                        encounterMedicationAdministrations.put(encounterId, medicationAdministrations);
-                    }
-                    medicationAdministrations.add(medicationAdministration);
-                });
-
-        return encounterMedicationAdministrations;
-    }
-
-    private static Map<String, List<Observation>> getEncounterObservations(Bundle bundle) {
-        Map<String, List<Observation>> encounterObservations = new HashMap<>();
-
-        bundle.getEntry().stream()
-                .filter(e -> e.getResource().fhirType().equals("Observation"))
-                .map(e -> (Observation) e.getResource())
-                .forEach(observation -> {
-                    String encounterId = observation.getEncounter().getReference();
-                    List<Observation> observations = encounterObservations.get(encounterId);
-                    if (observations == null) {
-                        observations = new LinkedList<>();
-                        encounterObservations.put(encounterId, observations);
-                    }
-                    observations.add(observation);
-                });
-
-        return encounterObservations;
-    }
-
-    private static Map<String, Encounter> getEncountersFromIds(Bundle bundle) {
-        return bundle.getEntry().stream()
-                .filter(e -> e.getResource().fhirType().equals("Encounter"))
-                .map(e -> (Encounter) e.getResource())
-                .collect(Collectors.toMap(e -> e.getIdElement().getIdPart(), e -> e));
-    }
-
-    private static List<Observation> getObservations(Bundle bundle) {
-        return bundle.getEntry().stream()
-                .filter(e -> e.getResource().fhirType().equals("Observation"))
-                .map(e -> (Observation) e.getResource())
-                .collect(Collectors.toList());
-    }
-
-    private static List<Encounter> getEncounters(Bundle bundle) {
-        return bundle.getEntry().stream()
-                .filter(e -> e.getResource().fhirType().equals("Encounter"))
-                .map(e -> (Encounter) e.getResource())
-                .collect(Collectors.toList());
-    }
-
-    private static Patient getPatient(Bundle bundle) {
-        return bundle.getEntry().stream()
-                .filter(e -> e.getResource().fhirType().equals("Patient"))
-                .map(e -> (Patient) e.getResource())
-                .findFirst().orElse(null);
     }
 
 }

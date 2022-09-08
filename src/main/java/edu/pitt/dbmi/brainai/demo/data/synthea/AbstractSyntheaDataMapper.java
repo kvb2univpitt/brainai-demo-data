@@ -67,11 +67,11 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static boolean hasCustomEncounterId(Observation observation) {
-        return syntheaToCustomEncounterId.containsKey(extractId(observation.getEncounter().getReference()));
+        return syntheaToCustomEncounterId.containsKey(observation.getEncounter().getReference());
     }
 
     protected static Bundle getBundle(Path file) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+        try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
             return (Bundle) JSON_PARSER.parseResource(reader);
         }
     }
@@ -85,7 +85,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomEncounterId(MedicationAdministration medicationAdministration) {
-        String id = extractId(medicationAdministration.getContext().getReference());
+        String id = medicationAdministration.getContext().getReference();
         if (!syntheaToCustomEncounterId.containsKey(id)) {
             System.err.printf("No encounter %s found for the medication administration.%n", id);
         }
@@ -94,7 +94,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String createCustomLocationId(IdType idType) {
-        String id = extractId(idType.getIdPart());
+        String id = idType.getIdPart();
         if (!syntheaToCustomLocationId.containsKey(id)) {
             syntheaToCustomLocationId.put(id, String.format("location_%d", ++locationIdCounter));
         }
@@ -103,7 +103,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomMedicationAdministrationId(MedicationAdministration medicationAdministration) {
-        String id = extractId(medicationAdministration.getIdElement().getIdPart());
+        String id = medicationAdministration.getIdElement().getIdPart();
         if (!syntheaToCustomMedicationAdministrationId.containsKey(id)) {
             syntheaToCustomMedicationAdministrationId.put(id, String.format("med_admin_%d", ++medicationAdministrationIdCounter));
         }
@@ -112,7 +112,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomObservationId(Observation observation) {
-        String id = extractId(observation.getIdElement().getIdPart());
+        String id = observation.getIdElement().getIdPart();
         if (!syntheaToCustomObservationId.containsKey(id)) {
             syntheaToCustomObservationId.put(id, String.format("obs_%d", ++observationIdCounter));
         }
@@ -121,7 +121,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomEncounterId(Observation observation) {
-        String id = extractId(observation.getEncounter().getReference());
+        String id = observation.getEncounter().getReference();
         if (!syntheaToCustomEncounterId.containsKey(id)) {
             System.err.printf("No encounter %s found for the observation.%n", id);
         }
@@ -130,7 +130,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomEncounterId(Encounter encounter) {
-        String id = extractId(encounter.getIdElement().getIdPart());
+        String id = encounter.getIdElement().getIdPart();
         if (!syntheaToCustomEncounterId.containsKey(id)) {
             syntheaToCustomEncounterId.put(id, String.format("enc_%d", ++encounterIdCounter));
         }
@@ -139,7 +139,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomPatientId(MedicationAdministration medicationAdministration) {
-        String id = extractId(medicationAdministration.getSubject().getReference());
+        String id = medicationAdministration.getSubject().getReference();
         if (!syntheaToCustomPatientId.containsKey(id)) {
             System.err.printf("No patient %s found for the observation.%n", id);
         }
@@ -148,7 +148,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomPatientId(Observation observation) {
-        String id = extractId(observation.getSubject().getReference());
+        String id = observation.getSubject().getReference();
         if (!syntheaToCustomPatientId.containsKey(id)) {
             System.err.printf("No patient %s found for the observation.%n", id);
         }
@@ -157,7 +157,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomPatientId(Encounter encounter) {
-        String id = extractId(encounter.getSubject().getReference());
+        String id = encounter.getSubject().getReference();
         if (!syntheaToCustomPatientId.containsKey(id)) {
             System.err.printf("No patient %s found for the encounter.%n", id);
         }
@@ -166,16 +166,12 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String getCustomPatientId(Patient patient) {
-        String id = extractId(patient.getIdElement().getIdPart());
+        String id = patient.getIdElement().getIdPart();
         if (!syntheaToCustomPatientId.containsKey(id)) {
             syntheaToCustomPatientId.put(id, String.format("pat_%d", ++patientIdCounter));
         }
 
         return syntheaToCustomPatientId.get(id);
-    }
-
-    protected static String extractId(String resourceId) {
-        return resourceId.replace("urn:uuid:", "");
     }
 
 }

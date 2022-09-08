@@ -83,6 +83,13 @@ public final class FileHeaders {
         "type_display"
     };
 
+    public static String[] ENCOUNTER_LOCATION = {
+        "ENCNTR_ID",
+        "START_DT",
+        "END_DT",
+        "LOCATION_ID"
+    };
+
     private FileHeaders() {
     }
 
