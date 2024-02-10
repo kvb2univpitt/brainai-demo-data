@@ -27,56 +27,57 @@ package edu.pitt.dbmi.brainai.demo.data;
 public final class FileHeaders {
 
     public static String[] PATIENT = {
-        "PERSON_ID",
-        "birth_dt_tm",
-        "name_last",
-        "name_first",
-        "sex",
-        "street_addr",
+        "id",
+        "birth_date",
+        "last_name",
+        "first_name",
+        "gender",
+        "address",
         "city",
         "state",
-        "zipcode"
+        "zip_code",
+        "country"
     };
     public static String[] ENCOUNTER = {
-        "ENCNTR_ID",
-        "REG_DT_TM",
-        "DISCH_DT_TM",
-        "PERSON_ID",
-        "ENCNTR_TYPE_CD",
-        "code_value.display",
-        "snomed_code",
-        "REASON_FOR_VISIT"
+        "id",
+        "start",
+        "end",
+        "patient_id",
+        "type_code",
+        "type_display",
+        "reason_code",
+        "reason_display"
     };
     public static String[] OBSERVATION = {
-        "OBSERV_ID",
-        "event_end_dt_tm",
-        "PERSON_ID",
-        "ENCNTR_ID",
-        "loinc_code",
-        "loinc_description",
-        "result_val",
-        "result_units_cd",
-        "Clinical Event Result Type",
-        "category.code"
+        "id",
+        "effective",
+        "patient_id",
+        "encounter_id",
+        "code",
+        "code_display",
+        "component_value",
+        "component_unit",
+        "component_type",
+        "category"
     };
     public static String[] MEDICATION_ADMINISTRATION = {
-        "MED_ADMIN_ID",
+        "id",
         "status",
-        "effective_dt",
-        "PERSON_ID",
-        "ENCNTR_ID",
-        "med_code",
-        "med_system",
-        "med_display"
+        "effective",
+        "patient_id",
+        "encounter_id",
+        "medication_code",
+        "medication_system",
+        "medication_display"
     };
 
     public static String[] LOCATION = {
-        "LOCATION_ID",
+        "id",
         "name",
         "address",
         "city",
         "state",
-        "zip",
+        "zip_code",
         "status",
         "type_code",
         "type_system",
@@ -84,10 +85,10 @@ public final class FileHeaders {
     };
 
     public static String[] ENCOUNTER_LOCATION = {
-        "ENCNTR_ID",
-        "START_DT",
-        "END_DT",
-        "LOCATION_ID"
+        "encounter_id",
+        "start",
+        "end",
+        "location_id"
     };
 
     private FileHeaders() {

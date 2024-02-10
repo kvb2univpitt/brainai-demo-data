@@ -26,7 +26,6 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,10 +33,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Address;
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Location;
@@ -58,10 +57,10 @@ import org.hl7.fhir.r4.model.Type;
  */
 public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
 
-    private static final int MAX_NUM_PATIENTS = 10;
-    private static final int MAX_NUM_ENCOUNTERS = 4;
-    private static final int MAX_NUM_OBSERVATIONS = 5;
-    private static final int MAX_NUM_MEDICATION_ADMINISTRATION = 10;
+    private static final int MAX_NUM_PATIENTS = Integer.MAX_VALUE;
+    private static final int MAX_NUM_ENCOUNTERS = Integer.MAX_VALUE;
+    private static final int MAX_NUM_OBSERVATIONS = Integer.MAX_VALUE;
+    private static final int MAX_NUM_MEDICATION_ADMINISTRATION = Integer.MAX_VALUE;
 
     private static int totalNumOfPatients = 0;
     private static int totalNumOfEncounters = 0;
@@ -123,83 +122,92 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
                     Date start = encounter.getPeriod().getStart();
                     Date end = encounter.getPeriod().getEnd();
                     String encounterId = getCustomEncounterId(encounter);
+                    String locationId = getCustomLocationId(encounter);
 
-                    long duration = TimeUnit.MILLISECONDS.toHours(end.getTime() - start.getTime());
-                    if (duration > 10) {
-                        Calendar calendar = Calendar.getInstance();
-                        calendar.setTime(start);
-                        calendar.add(Calendar.HOUR_OF_DAY, 2);
-                        Date midDate = calendar.getTime();
+                    data.clear();
+                    data.add(encounterId);
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
+                    data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
+                    data.add(locationId);
+                    writer.println(data.stream().collect(Collectors.joining("\t")));
+                    totalNumOfEncounterLocations++;
 
-                        data.clear();
-                        data.add(encounterId);
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-                        data.add("location_5");
-                        writer.println(data.stream().collect(Collectors.joining("\t")));
-                        totalNumOfEncounterLocations++;
-
-                        calendar.setTime(midDate);
-                        calendar.add(Calendar.HOUR_OF_DAY, 1);
-                        midDate = calendar.getTime();
-
-                        calendar.setTime(midDate);
-                        calendar.add(Calendar.HOUR_OF_DAY, 3);
-                        Date midDate2 = calendar.getTime();
-
-                        data.clear();
-                        data.add(encounterId);
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate2));
-                        data.add("location_4");
-                        writer.println(data.stream().collect(Collectors.joining("\t")));
-                        totalNumOfEncounterLocations++;
-
-                        calendar.setTime(midDate2);
-                        calendar.add(Calendar.HOUR_OF_DAY, 1);
-                        midDate = calendar.getTime();
-
-                        data.clear();
-                        data.add(encounterId);
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
-                        data.add("location_8");
-                        writer.println(data.stream().collect(Collectors.joining("\t")));
-                        totalNumOfEncounterLocations++;
-                    } else if (duration > 5) {
-                        Calendar calendar = Calendar.getInstance();
-                        calendar.setTime(start);
-                        calendar.add(Calendar.HOUR_OF_DAY, 3);
-                        Date midDate = calendar.getTime();
-
-                        data.clear();
-                        data.add(encounterId);
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-                        data.add("location_1");
-                        writer.println(data.stream().collect(Collectors.joining("\t")));
-                        totalNumOfEncounterLocations++;
-
-                        calendar.setTime(midDate);
-                        calendar.add(Calendar.HOUR_OF_DAY, 1);
-                        midDate = calendar.getTime();
-
-                        data.clear();
-                        data.add(encounterId);
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
-                        data.add("location_3");
-                        writer.println(data.stream().collect(Collectors.joining("\t")));
-                        totalNumOfEncounterLocations++;
-                    } else {
-                        data.clear();
-                        data.add(encounterId);
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
-                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
-                        data.add(syntheaToCustomLocationId.get(encounter.getServiceProvider().getReference()));
-                        writer.println(data.stream().collect(Collectors.joining("\t")));
-                        totalNumOfEncounterLocations++;
-                    }
+//                    long duration = TimeUnit.MILLISECONDS.toHours(end.getTime() - start.getTime());
+//                    if (duration > 10) {
+//                        Calendar calendar = Calendar.getInstance();
+//                        calendar.setTime(start);
+//                        calendar.add(Calendar.HOUR_OF_DAY, 2);
+//                        Date midDate = calendar.getTime();
+//
+//                        data.clear();
+//                        data.add(encounterId);
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+//                        data.add("location_5");
+//                        writer.println(data.stream().collect(Collectors.joining("\t")));
+//                        totalNumOfEncounterLocations++;
+//
+//                        calendar.setTime(midDate);
+//                        calendar.add(Calendar.HOUR_OF_DAY, 1);
+//                        midDate = calendar.getTime();
+//
+//                        calendar.setTime(midDate);
+//                        calendar.add(Calendar.HOUR_OF_DAY, 3);
+//                        Date midDate2 = calendar.getTime();
+//
+//                        data.clear();
+//                        data.add(encounterId);
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate2));
+//                        data.add("location_4");
+//                        writer.println(data.stream().collect(Collectors.joining("\t")));
+//                        totalNumOfEncounterLocations++;
+//
+//                        calendar.setTime(midDate2);
+//                        calendar.add(Calendar.HOUR_OF_DAY, 1);
+//                        midDate = calendar.getTime();
+//
+//                        data.clear();
+//                        data.add(encounterId);
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
+//                        data.add("location_8");
+//                        writer.println(data.stream().collect(Collectors.joining("\t")));
+//                        totalNumOfEncounterLocations++;
+//                    } else if (duration > 5) {
+//                        Calendar calendar = Calendar.getInstance();
+//                        calendar.setTime(start);
+//                        calendar.add(Calendar.HOUR_OF_DAY, 3);
+//                        Date midDate = calendar.getTime();
+//
+//                        data.clear();
+//                        data.add(encounterId);
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+//                        data.add("location_1");
+//                        writer.println(data.stream().collect(Collectors.joining("\t")));
+//                        totalNumOfEncounterLocations++;
+//
+//                        calendar.setTime(midDate);
+//                        calendar.add(Calendar.HOUR_OF_DAY, 1);
+//                        midDate = calendar.getTime();
+//
+//                        data.clear();
+//                        data.add(encounterId);
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
+//                        data.add("location_3");
+//                        writer.println(data.stream().collect(Collectors.joining("\t")));
+//                        totalNumOfEncounterLocations++;
+//                    } else {
+//                        data.clear();
+//                        data.add(encounterId);
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
+//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
+//                        data.add(syntheaToCustomLocationId.get(encounter.getServiceProvider().getReference()));
+//                        writer.println(data.stream().collect(Collectors.joining("\t")));
+//                        totalNumOfEncounterLocations++;
+//                    }
                 }
             }
         }
@@ -210,37 +218,24 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
             // write out header
             writer.println(toLineHeader(FileHeaders.LOCATION));
 
-            int count = 0;
-            int limit = 3;
             for (Organization organization : organizations) {
                 data.clear();
                 data.add(createCustomLocationId(organization.getIdElement()));
                 data.add(organization.getName());
 
                 Address address = organization.getAddressFirstRep();
-                data.add(address.getText());
+                String addressLine = address.getLine().isEmpty()
+                        ? "4200 Fifth Ave"
+                        : address.getLine().get(0).asStringValue();
+                data.add(addressLine);
                 data.add(address.getCity());
                 data.add(address.getState());
                 data.add(address.getPostalCode());
                 data.add(Location.LocationStatus.ACTIVE.toString());
 
-                switch (count % limit) {
-                    case 0 -> {
-                        data.add("INLAB");
-                        data.add("inpatient laboratory");
-                        data.add("A location that plays the role of delivering services which may include tests are done on clinical specimens to get health information about a patient pertaining to the diagnosis, treatment, and prevention of disease for a hospital visit longer than one day.");
-                    }
-                    case 1 -> {
-                        data.add("PEDICU");
-                        data.add("Pediatric intensive care unit");
-                        data.add("");
-                    }
-                    default -> {
-                        data.add("ICU");
-                        data.add("Intensive care unit");
-                        data.add("");
-                    }
-                }
+                data.add(organization.getTypeFirstRep().getCodingFirstRep().getCode());
+                data.add(organization.getTypeFirstRep().getCodingFirstRep().getSystem());
+                data.add(organization.getTypeFirstRep().getCodingFirstRep().getDisplay());
 
                 writer.println(data.stream().collect(Collectors.joining("\t")));
                 totalNumOfLocations++;
@@ -290,17 +285,30 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
                     data.add(observation.getCode().getCodingFirstRep().getDisplay());
 
                     Type type = observation.getValue();
-                    if (type == null || !(type instanceof Quantity)) {
-                        data.add("");
-                        data.add("");
-                        data.add("");
+                    if (type == null) {
+                        type = observation.getComponentFirstRep().getValue();
+                        if (type instanceof Quantity) {
+                            Quantity quantity = observation.getComponentFirstRep().getValueQuantity();
+                            data.add(quantity.getValue().toString());
+                            data.add(quantity.getUnit());
+                            data.add("numeric");
+                        } else {
+                            data.add("");
+                            data.add("");
+                            data.add("");
+                        }
                     } else {
-                        data.add(observation.getValueQuantity().getValue().toString());
-                        data.add(observation.getValueQuantity().getUnit());
-                        data.add("numeric");
+                        if (type instanceof Quantity) {
+                            data.add(observation.getValueQuantity().getValue().toString());
+                            data.add(observation.getValueQuantity().getUnit());
+                            data.add("numeric");
+                        } else {
+                            data.add("");
+                            data.add("");
+                            data.add("");
+                        }
                     }
-                    data.add("laboratory");
-
+                    data.add(observation.getCategoryFirstRep().getCodingFirstRep().getDisplay());
                     writer.println(data.stream().collect(Collectors.joining("\t")));
                     totalNumOfObservations++;
                 }
@@ -320,10 +328,18 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getStart()));
                     data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(encounter.getPeriod().getEnd()));
                     data.add(getCustomPatientId(encounter));
-                    data.add("394656005");
-                    data.add("Inpatient");
-                    data.add("126598008");
-                    data.add("Neoplasm of connective tissues disorder");
+
+                    CodeableConcept type = encounter.getTypeFirstRep();
+                    String typeCode = type.getCodingFirstRep().getCode();
+                    String typeDisplay = type.getCodingFirstRep().getDisplay();
+                    data.add(getValue(typeCode, "394656005"));
+                    data.add(getValue(typeDisplay, "Inpatient"));
+
+                    CodeableConcept reason = encounter.getReasonCodeFirstRep();
+                    String reasonCode = reason.getCodingFirstRep().getCode();
+                    String reasonDisplay = reason.getCodingFirstRep().getDisplay();
+                    data.add(getValue(reasonCode, "126598008"));
+                    data.add(getValue(reasonDisplay, "Neoplasm of connective tissues disorder"));
 
                     writer.println(data.stream().collect(Collectors.joining("\t")));
                     totalNumOfEncounters++;
@@ -344,7 +360,12 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
                 data.add(patient.getNameFirstRep().getFamily());
                 data.add(patient.getNameFirstRep().getGiven().get(0).getValueAsString());
                 data.add(getValue(patient.getGender().toCode(), "female"));
-                data.add(getValue(patient.getAddressFirstRep().getText(), "4200 Fifth Ave"));
+
+                Address address = patient.getAddressFirstRep();
+                String addressLine = address.getLine().isEmpty()
+                        ? "4200 Fifth Ave"
+                        : address.getLine().get(0).asStringValue();
+                data.add(addressLine);
                 data.add(getValue(patient.getAddressFirstRep().getCity(), "Pittsburgh"));
                 data.add(getValue(patient.getAddressFirstRep().getState(), "Pennsylvania"));
                 data.add(getValue(patient.getAddressFirstRep().getPostalCode(), "15260"));
@@ -361,14 +382,17 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
         // get unique organization IDs from encounters
         Set<String> organizationIds = new HashSet<>();
         for (List<Encounter> encounters : patientEncounters.values()) {
-            encounters.forEach(encounter -> organizationIds.add(encounter.getServiceProvider().getReference()));
+
+            encounters.forEach(encounter -> {
+                organizationIds.add(encounter.getServiceProvider().getReferenceElement().getIdPart().replaceAll("synthea\\|", ""));
+            });
         }
 
         for (Bundle bundle : bundles) {
             for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
                 if (entry.getResource().fhirType().equals("Organization")) {
                     Organization organization = (Organization) entry.getResource();
-                    String organizationId = organization.getIdElement().getIdPart();
+                    String organizationId = organization.getIdElement().getIdPart().replaceAll("urn:uuid:", "");
                     if (organizationIds.contains(organizationId)) {
                         organizations.add(organization);
                     }

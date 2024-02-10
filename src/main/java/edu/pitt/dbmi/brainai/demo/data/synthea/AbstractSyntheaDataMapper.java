@@ -71,7 +71,7 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static Bundle getBundle(Path file) throws IOException {
-        try ( BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
+        try (BufferedReader reader = Files.newBufferedReader(file, Charset.defaultCharset())) {
             return (Bundle) JSON_PARSER.parseResource(reader);
         }
     }
@@ -94,7 +94,16 @@ public class AbstractSyntheaDataMapper {
     }
 
     protected static String createCustomLocationId(IdType idType) {
-        String id = idType.getIdPart();
+        String id = idType.getIdPart().replaceAll("urn:uuid:", "");
+        if (!syntheaToCustomLocationId.containsKey(id)) {
+            syntheaToCustomLocationId.put(id, String.format("location_%d", ++locationIdCounter));
+        }
+
+        return syntheaToCustomLocationId.get(id);
+    }
+
+    protected static String getCustomLocationId(Encounter encounter) {
+        String id = encounter.getServiceProvider().getReferenceElement().getIdPart().replaceAll("synthea\\|", "");
         if (!syntheaToCustomLocationId.containsKey(id)) {
             syntheaToCustomLocationId.put(id, String.format("location_%d", ++locationIdCounter));
         }
