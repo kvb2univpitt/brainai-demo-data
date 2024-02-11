@@ -294,6 +294,7 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
                 data.add(getValue(patient.getAddressFirstRep().getCity(), "Pittsburgh"));
                 data.add(getValue(patient.getAddressFirstRep().getState(), "Pennsylvania"));
                 data.add(getValue(patient.getAddressFirstRep().getPostalCode(), "15260"));
+                data.add(getValue(patient.getAddressFirstRep().getCountry(), "US"));
 
                 writer.println(data.stream().collect(Collectors.joining(DATA_DELIMITER)));
                 totalNumOfPatients++;
