@@ -131,83 +131,6 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
                     data.add(locationId);
                     writer.println(data.stream().collect(Collectors.joining("\t")));
                     totalNumOfEncounterLocations++;
-
-//                    long duration = TimeUnit.MILLISECONDS.toHours(end.getTime() - start.getTime());
-//                    if (duration > 10) {
-//                        Calendar calendar = Calendar.getInstance();
-//                        calendar.setTime(start);
-//                        calendar.add(Calendar.HOUR_OF_DAY, 2);
-//                        Date midDate = calendar.getTime();
-//
-//                        data.clear();
-//                        data.add(encounterId);
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-//                        data.add("location_5");
-//                        writer.println(data.stream().collect(Collectors.joining("\t")));
-//                        totalNumOfEncounterLocations++;
-//
-//                        calendar.setTime(midDate);
-//                        calendar.add(Calendar.HOUR_OF_DAY, 1);
-//                        midDate = calendar.getTime();
-//
-//                        calendar.setTime(midDate);
-//                        calendar.add(Calendar.HOUR_OF_DAY, 3);
-//                        Date midDate2 = calendar.getTime();
-//
-//                        data.clear();
-//                        data.add(encounterId);
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate2));
-//                        data.add("location_4");
-//                        writer.println(data.stream().collect(Collectors.joining("\t")));
-//                        totalNumOfEncounterLocations++;
-//
-//                        calendar.setTime(midDate2);
-//                        calendar.add(Calendar.HOUR_OF_DAY, 1);
-//                        midDate = calendar.getTime();
-//
-//                        data.clear();
-//                        data.add(encounterId);
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
-//                        data.add("location_8");
-//                        writer.println(data.stream().collect(Collectors.joining("\t")));
-//                        totalNumOfEncounterLocations++;
-//                    } else if (duration > 5) {
-//                        Calendar calendar = Calendar.getInstance();
-//                        calendar.setTime(start);
-//                        calendar.add(Calendar.HOUR_OF_DAY, 3);
-//                        Date midDate = calendar.getTime();
-//
-//                        data.clear();
-//                        data.add(encounterId);
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-//                        data.add("location_1");
-//                        writer.println(data.stream().collect(Collectors.joining("\t")));
-//                        totalNumOfEncounterLocations++;
-//
-//                        calendar.setTime(midDate);
-//                        calendar.add(Calendar.HOUR_OF_DAY, 1);
-//                        midDate = calendar.getTime();
-//
-//                        data.clear();
-//                        data.add(encounterId);
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(midDate));
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
-//                        data.add("location_3");
-//                        writer.println(data.stream().collect(Collectors.joining("\t")));
-//                        totalNumOfEncounterLocations++;
-//                    } else {
-//                        data.clear();
-//                        data.add(encounterId);
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(start));
-//                        data.add(DateFormats.MM_DD_YYYY_HHMMSS_AM.format(end));
-//                        data.add(syntheaToCustomLocationId.get(encounter.getServiceProvider().getReference()));
-//                        writer.println(data.stream().collect(Collectors.joining("\t")));
-//                        totalNumOfEncounterLocations++;
-//                    }
                 }
             }
         }
@@ -340,6 +263,8 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
                     String reasonDisplay = reason.getCodingFirstRep().getDisplay();
                     data.add(getValue(reasonCode, "126598008"));
                     data.add(getValue(reasonDisplay, "Neoplasm of connective tissues disorder"));
+                    data.add(getCustomLocationId(encounter));
+                    data.add(encounter.getServiceProvider().getDisplay());
 
                     writer.println(data.stream().collect(Collectors.joining("\t")));
                     totalNumOfEncounters++;
@@ -382,7 +307,6 @@ public class ReducedMapFromSynthea extends AbstractSyntheaDataMapper {
         // get unique organization IDs from encounters
         Set<String> organizationIds = new HashSet<>();
         for (List<Encounter> encounters : patientEncounters.values()) {
-
             encounters.forEach(encounter -> {
                 organizationIds.add(encounter.getServiceProvider().getReferenceElement().getIdPart().replaceAll("synthea\\|", ""));
             });

@@ -46,7 +46,9 @@ public final class FileHeaders {
         "type_code",
         "type_display",
         "reason_code",
-        "reason_display"
+        "reason_display",
+        "location_id",
+        "location_display"
     };
     public static String[] OBSERVATION = {
         "id",
